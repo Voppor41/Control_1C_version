@@ -1,3 +1,4 @@
+import logging
 from typing import AsyncGenerator
 
 from sqlalchemy import text
@@ -5,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -35,13 +38,27 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    from src.data.seed import seed_initial_data
+    from src.core.config import settings
+    from src.data.seed import seed_demo_data, seed_initial_data
 
-    async with engine.begin() as conn:
-        await conn.execute(text("SELECT 1"))
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise RuntimeError(
+            "Database is unreachable. Check DATABASE_URL and that Postgres is running."
+        ) from exc
 
     async with async_session() as session:
-        await seed_initial_data(session)
+        try:
+            await seed_initial_data(session)
+            if settings.should_seed_demo:
+                await seed_demo_data(session)
+        except Exception as exc:
+            logger.exception("seed failed")
+            raise RuntimeError(
+                "Failed to seed data. Apply migrations first: alembic upgrade head"
+            ) from exc
 
 
 async def dispose_engine() -> None:

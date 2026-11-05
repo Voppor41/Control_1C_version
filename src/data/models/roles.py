@@ -1,13 +1,13 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, String
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
-from .enums import RoleCode
+from .enums import RoleCode, persisted_enum
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class Role(TimestampMixin, Base):
         default=uuid.uuid4,
     )
     code: Mapped[RoleCode] = mapped_column(
-        Enum(RoleCode, name="role_code", native_enum=False, length=32),
+        persisted_enum(RoleCode, "role_code"),
         unique=True,
         index=True,
         nullable=False,
