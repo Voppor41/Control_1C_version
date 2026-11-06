@@ -4,6 +4,8 @@ REST API for tracking 1C configurations, telling a client that an update is need
 
 Specialists can use the Russian web console («Норд»), `/docs`, or the curl / smoke flow below.
 
+Подробный разбор для устной защиты — в [docs/dokumentaciya-dlya-zashchity.md](docs/dokumentaciya-dlya-zashchity.md): по файлам API и консоли «Норд», по фактическому коду.
+
 ## Morning check
 
 With the API already running:
