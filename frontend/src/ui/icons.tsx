@@ -92,10 +92,13 @@ const paths: Record<IconName, ReactNode> = {
 
 export function Mark({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor" opacity="0.14" />
-      <path d="M16 5.2 18.4 13.2 26.4 16 18.4 18.8 16 26.8 13.6 18.8 5.6 16 13.6 13.2Z" fill="#d7b56a" />
-      <circle cx="16" cy="16" r="1.5" fill="#14241c" />
+    <svg className="mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="3" fill="#8c2f2a" />
+      <rect x="8" y="3" width="21" height="26" fill="#f3efe6" />
+      <path d="M12 11h13M12 16h9M12 21h11" stroke="#1c1914" strokeWidth="1.6" />
+      <circle cx="4" cy="9" r="1.15" fill="#f3efe6" />
+      <circle cx="4" cy="16" r="1.15" fill="#f3efe6" />
+      <circle cx="4" cy="23" r="1.15" fill="#f3efe6" />
     </svg>
   );
 }

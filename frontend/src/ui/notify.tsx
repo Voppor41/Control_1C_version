@@ -56,7 +56,7 @@ export function NotifyDialog({
         {formError ? <Banner>{formError}</Banner> : null}
         <p className="lede">
           {installationId
-            ? "Заголовок и текст можно оставить пустыми: Норд соберёт их из установленной и текущей версий."
+            ? "Заголовок и текст можно оставить пустыми: Верконт соберёт их из установленной и текущей версий."
             : "Без установки нужен текст сообщения. Получатели — активные пользователи клиента."}
         </p>
         <Field label="Заголовок" error={submit.error?.fieldErrors.title}>

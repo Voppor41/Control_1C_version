@@ -110,7 +110,7 @@ export function Crumbs({ items }: { items: { to?: string; label: string }[] }) {
 }
 
 export function StatusPill({ status }: { status: UpdateStatus }) {
-  return <span className={cx("pill", statusTone(status))}>{statusLabel(status)}</span>;
+  return <span className={cx("pill", statusTone(status), `st-${status}`)}>{statusLabel(status)}</span>;
 }
 
 export function CurrencyPill({ outdated }: { outdated: boolean | null }) {

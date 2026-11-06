@@ -91,9 +91,9 @@ export function ReportsPage() {
               </div>
             ) : null}
             <p className="legend">
-              <span><i style={{ background: "#23415f" }} />В плане</span>
-              <span><i style={{ background: "#1e4a38" }} />Выполнено</span>
-              <span><i style={{ background: "#c4bbae" }} />Отменено</span>
+              <span><i className="swatch-planned" />В плане</span>
+              <span><i className="swatch-done" />Выполнено</span>
+              <span><i className="swatch-cancel" />Отменено</span>
             </p>
             <div className="facts dense">
               {STATUS_ORDER.map((status) => (

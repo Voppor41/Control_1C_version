@@ -53,9 +53,9 @@ export function useDebounced<T>(value: T, delay = 280): T {
 
 export function useTitle(title: string) {
   useEffect(() => {
-    document.title = `${title} — Норд`;
+    document.title = `${title} — Верконт`;
     return () => {
-      document.title = "Норд — сопровождение 1С";
+      document.title = "Верконт — учёт версий 1С";
     };
   }, [title]);
 }

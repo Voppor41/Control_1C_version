@@ -2,7 +2,7 @@
 
 REST API for tracking 1C configurations, telling a client that an update is needed, booking a date, and reporting the result to the head of support.
 
-Specialists can use the Russian web console («Норд»), `/docs`, or the curl / smoke flow below.
+Specialists can use the Russian web console («Верконт»), `/docs`, or the curl / smoke flow below.
 
 ## Morning check
 
@@ -188,6 +188,6 @@ src/data/models             SQLAlchemy models
 src/data/seed.py            roles and demo walkthrough
 alembic/versions            schema
 docker-compose.yml          Postgres 16, the API, and the web console
-frontend/                   Vite + React console («Норд»)
+frontend/                   Vite + React console («Верконт»)
 scripts/smoke.py            repeatable TZ walkthrough
 ```
