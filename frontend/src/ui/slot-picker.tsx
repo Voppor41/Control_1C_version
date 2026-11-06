@@ -9,10 +9,12 @@ export function SlotPicker({
   value,
   onChange,
   allowEmpty = false,
+  onDayChange,
 }: {
   value: string | null;
   onChange: (slotId: string | null) => void;
   allowEmpty?: boolean;
+  onDayChange?: (day: string | null) => void;
 }) {
   const dates = useAsync(() => api.availableDates(), []);
   const [day, setDay] = useState<string | null>(null);
@@ -20,6 +22,12 @@ export function SlotPicker({
     if (!day) return Promise.resolve({ items: [] as SlotRead[], total: 0, limit: 50, offset: 0 });
     return api.listSlots({ available_only: true, date_from: day, date_to: day, limit: 50 });
   }, [day]);
+
+  function pickDay(next: string | null) {
+    setDay(next);
+    onDayChange?.(next);
+    if (value !== null) onChange(null);
+  }
 
   if (dates.status === "loading" && !dates.data) return <SkeletonList rows={3} />;
   if (dates.status === "error" && !dates.data) {
@@ -44,7 +52,7 @@ export function SlotPicker({
             type="button"
             className={value === null && !day ? "choice is-on" : "choice"}
             onClick={() => {
-              setDay(null);
+              pickDay(null);
               onChange(null);
             }}
           >
@@ -57,7 +65,7 @@ export function SlotPicker({
             type="button"
             key={item.slot_date}
             className={day === item.slot_date ? "choice is-on" : "choice"}
-            onClick={() => setDay(item.slot_date)}
+            onClick={() => pickDay(item.slot_date)}
           >
             <b>{formatDate(item.slot_date)}</b>
             <small>

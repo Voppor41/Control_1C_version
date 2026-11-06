@@ -147,6 +147,7 @@ export function RequestForm({ preset, onCreated }: { preset?: string | null; onC
   );
   const [installationId, setInstallationId] = useState(preset ?? "");
   const [slotId, setSlotId] = useState<string | null>(null);
+  const [day, setDay] = useState<string | null>(null);
   const [comment, setComment] = useState("");
 
   const items = installations.data?.items ?? [];
@@ -193,14 +194,14 @@ export function RequestForm({ preset, onCreated }: { preset?: string | null; onC
         {selected ? null : preset ? <p className="field-hint">Выбранная база подставится, если она есть в списке.</p> : null}
       </Field>
       <Field label="Дата">
-        <SlotPicker value={slotId} onChange={setSlotId} allowEmpty />
+        <SlotPicker value={slotId} onChange={setSlotId} allowEmpty onDayChange={setDay} />
       </Field>
       <Field label="Комментарий">
         <TextArea value={comment} maxLength={4000} onChange={(event) => setComment(event.target.value)} />
       </Field>
       <div className="form-actions">
-        <Button type="submit" disabled={submit.pending}>
-          {submit.pending ? "Отправляем…" : slotId ? "Записаться" : "Запросить без даты"}
+        <Button type="submit" disabled={submit.pending || (Boolean(day) && !slotId)}>
+          {submit.pending ? "Отправляем…" : slotId ? "Записаться" : day ? "Выберите окно" : "Запросить без даты"}
         </Button>
       </div>
     </form>

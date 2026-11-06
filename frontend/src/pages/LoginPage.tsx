@@ -9,7 +9,7 @@ import { Banner, Button, Field, TextInput } from "../ui/ui";
 const DEMOS = [
   { role: "Администратор", email: "admin@example.com", password: "admin123", note: "пользователи и реестр" },
   { role: "Специалист", email: "specialist@example.com", password: "specialist123", note: "Мария Смирнова" },
-  { role: "Руководитель", email: "manager@example.com", password: "manager123", note: "Алексей Орлов" },
+  { role: "Руководитель", email: "manager@example.com", password: "manager123", note: "Софья Лане" },
   { role: "Клиент", email: "client@example.com", password: "client123", note: "ООО Ромашка" },
 ];
 
