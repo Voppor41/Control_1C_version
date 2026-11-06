@@ -1,5 +1,3 @@
-"""Идемпотентное наполнение: четыре роли и демонстрационные клиенты, версии и слоты."""
-
 import asyncio
 import logging
 import uuid
@@ -8,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.security import hash_password
+from src.core.security import hash_password, verify_password
 from src.data.models import (
     Client,
     ClientConfiguration,
@@ -90,14 +88,20 @@ async def _ensure_user(
     role: Role,
     client_id: uuid.UUID | None = None,
 ) -> User:
-    """Создаёт пользователя или возвращает уже существующего с тем же id или почтой."""
+    """Создаёт пользователя или возвращает уже существующего с тем же id или почтой.
+
+    Для демо-аккаунтов пароль приводится к значению из README, если он не совпадает:
+    иначе старая БД оставляет чужой хеш, и логин admin123 даёт 401.
+    """
     user = await session.scalar(select(User).where(User.email == email))
     if user is None:
         user = await session.get(User, demo_id(key))
     if user is not None:
         if user.email != email:
             user.email = email
-            await session.flush()
+        if not verify_password(password, user.hashed_password):
+            user.hashed_password = hash_password(password)
+        await session.flush()
         return user
     user = User(
         id=demo_id(key),
@@ -165,7 +169,11 @@ async def _ensure_version(
     is_current: bool,
     notes: str,
 ) -> ConfigurationVersion:
-    """Создаёт релиз. Повторно флаг is_current не переключает, чтобы не затереть ручные правки."""
+    """Создаёт релиз. Если такой версии ещё нет и она должна быть актуальной,
+    снимает флаг is_current с другого релиза той же конфигурации — иначе
+    сработает uq_configuration_versions_current на старых данных.
+    Существующую строку не переписывает.
+    """
     row = await session.scalar(
         select(ConfigurationVersion).where(
             ConfigurationVersion.configuration_id == configuration_id,
@@ -174,6 +182,19 @@ async def _ensure_version(
     )
     if row is not None:
         return row
+    if is_current:
+        existing_current = (
+            await session.execute(
+                select(ConfigurationVersion).where(
+                    ConfigurationVersion.configuration_id == configuration_id,
+                    ConfigurationVersion.is_current.is_(True),
+                )
+            )
+        ).scalars().all()
+        for current in existing_current:
+            current.is_current = False
+        if existing_current:
+            await session.flush()
     row = ConfigurationVersion(
         id=demo_id(key),
         configuration_id=configuration_id,
