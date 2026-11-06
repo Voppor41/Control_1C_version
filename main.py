@@ -34,9 +34,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# The SPA is normally same-origin (Vite proxy or the nginx frontend service).
+# These origins cover a browser that calls the API on :8000 directly.
+_LOCAL_UI_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_LOCAL_UI_ORIGINS,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
