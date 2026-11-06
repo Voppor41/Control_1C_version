@@ -2,7 +2,7 @@
 
 REST API for tracking 1C configurations, telling a client that an update is needed, booking a date, and reporting the result to the head of support.
 
-There is no separate frontend. Specialists can use `/docs` or the curl / smoke flow below.
+Specialists can use the Russian web console («Норд»), `/docs`, or the curl / smoke flow below.
 
 ## Morning check
 
@@ -57,16 +57,32 @@ Interactive docs: http://127.0.0.1:8000/docs
 
 ## Run
 
-### Docker Compose (API + Postgres)
+### Docker Compose (API + Postgres + web console)
 
 ```bash
 docker compose up --build
 ```
 
-The API container waits for Postgres, runs `alembic upgrade head`, then starts uvicorn. Startup seeds roles (if the migration has not already inserted them) and the demo walkthrough data.
+The API container waits for Postgres, runs `alembic upgrade head`, then starts uvicorn. Startup seeds roles (if the migration has not already inserted them) and the demo walkthrough data. The `web` service builds the SPA and proxies `/api` and `/health` to the API, so the browser stays on one origin. Interactive docs stay on port 8000.
 
+- Web console: http://127.0.0.1:8080
 - API: http://127.0.0.1:8000
+- Docs: http://127.0.0.1:8000/docs
 - Postgres on the host: `localhost:5433` (`postgres` / `postgres`, database `control_1c_version`)
+
+### UI against an API that is already on port 8000
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://127.0.0.1:5173 . Vite proxies `/api` and `/health` to http://127.0.0.1:8000 , so `/docs` on port 8000 keeps working. The interface is in Russian. Sign in with the demo accounts in the next section; the same passwords are shown on the login screen as a local demo hint, not as production credentials.
+
+`npm run preview` serves the production build on http://127.0.0.1:4173 and uses the same proxy.
+
+The API allows browser calls from localhost (Vite `5173` and `4173`, compose UI `8080`, and any other localhost port). The supported setup is still the proxy.
 
 ### API on the host, Postgres from Compose
 
@@ -171,6 +187,7 @@ src/services                checks, notifications, planning, reports
 src/data/models             SQLAlchemy models
 src/data/seed.py            roles and demo walkthrough
 alembic/versions            schema
-docker-compose.yml          Postgres 16 and the API
+docker-compose.yml          Postgres 16, the API, and the web console
+frontend/                   Vite + React console («Норд»)
 scripts/smoke.py            repeatable TZ walkthrough
 ```
