@@ -1,3 +1,5 @@
+"""Идемпотентное наполнение: четыре роли и демонстрационные клиенты, версии и слоты."""
+
 import asyncio
 import logging
 import uuid
@@ -51,10 +53,16 @@ ROLE_TITLES = {
 
 
 def demo_id(name: str) -> uuid.UUID:
+    """Стабильный UUID демо-строки, чтобы повторный запуск не плодил дубликаты.
+
+    Параметры:
+        name: логический ключ, например user:admin.
+    """
     return uuid.uuid5(NS, name)
 
 
 async def seed_initial_data(session: AsyncSession) -> None:
+    """Добавляет четыре роли, если их ещё нет. Повторный вызов ничего не дублирует."""
     existing = set()
     for code in (await session.execute(select(Role.code))).scalars().all():
         existing.add(code.value if hasattr(code, "value") else str(code))
@@ -65,6 +73,7 @@ async def seed_initial_data(session: AsyncSession) -> None:
 
 
 async def _role(session: AsyncSession, code: RoleCode) -> Role:
+    """Ищет роль по коду. Падает, если миграция со справочником ещё не применена."""
     role = await session.scalar(select(Role).where(Role.code == code))
     if role is None:
         raise RuntimeError(f"Role {code.value} is missing. Run alembic upgrade head first.")
@@ -81,6 +90,7 @@ async def _ensure_user(
     role: Role,
     client_id: uuid.UUID | None = None,
 ) -> User:
+    """Создаёт пользователя или возвращает уже существующего с тем же id или почтой."""
     user = await session.scalar(select(User).where(User.email == email))
     if user is None:
         user = await session.get(User, demo_id(key))
@@ -112,6 +122,7 @@ async def _ensure_client(
     email: str,
     responsible_employee_id: uuid.UUID,
 ) -> Client:
+    """Создаёт организацию по точному названию, если такой ещё нет."""
     client = await session.scalar(select(Client).where(Client.company_name == company_name))
     if client is not None:
         return client
@@ -134,6 +145,7 @@ async def _ensure_configuration(
     name: str,
     description: str,
 ) -> Configuration:
+    """Создаёт конфигурацию каталога по имени."""
     row = await session.scalar(select(Configuration).where(Configuration.name == name))
     if row is not None:
         return row
@@ -153,6 +165,7 @@ async def _ensure_version(
     is_current: bool,
     notes: str,
 ) -> ConfigurationVersion:
+    """Создаёт релиз. Повторно флаг is_current не переключает, чтобы не затереть ручные правки."""
     row = await session.scalar(
         select(ConfigurationVersion).where(
             ConfigurationVersion.configuration_id == configuration_id,
@@ -183,6 +196,7 @@ async def _ensure_installation(
     installed_version_id: uuid.UUID,
     infobase_name: str,
 ) -> ClientConfiguration:
+    """Привязывает конфигурацию к клиенту один раз."""
     row = await session.scalar(
         select(ClientConfiguration).where(
             ClientConfiguration.client_id == client_id,
@@ -204,6 +218,7 @@ async def _ensure_installation(
 
 
 async def seed_demo_data(session: AsyncSession) -> None:
+    """Демо для утренней проверки: Ромашка на старом релизе, Василёк уже обновлён, слоты на неделю вперёд."""
     admin_role = await _role(session, RoleCode.ADMIN)
     specialist_role = await _role(session, RoleCode.SPECIALIST)
     manager_role = await _role(session, RoleCode.MANAGER)
@@ -234,6 +249,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         role=manager_role,
     )
 
+    # Ромашка отстаёт от каталога — на ней проверяют уведомление и запись на дату.
     romashka = await _ensure_client(
         session,
         key="client:romashka",
@@ -354,6 +370,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
                 )
             )
 
+    # Уже выполненное обновление Василька нужно отчёту руководителя до любых действий в интерфейсе.
     update_id = demo_id("update:vasilek:zup")
     scheduled = await session.get(ScheduledUpdate, update_id)
     if scheduled is None:
@@ -440,6 +457,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
 
 
 async def _cli() -> None:
+    """Точка входа python -m src.data.seed: роли и демо без запуска HTTP."""
     from src.core.database import async_session
 
     async with async_session() as session:

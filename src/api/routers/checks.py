@@ -1,3 +1,5 @@
+"""Запуск проверки версий, история проверок и список тех, кому пора обновляться."""
+
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
@@ -16,11 +18,13 @@ router = APIRouter(prefix="/version-checks", tags=["version-checks"])
 
 
 def _day_start(value: date) -> datetime:
+    """Начало календарного дня в UTC для фильтра истории."""
     return datetime.combine(value, time.min, tzinfo=timezone.utc)
 
 
 @router.post("/run", response_model=RunChecksResponse, status_code=201, summary="2.1 Compare installed and current versions")
 async def run_checks(payload: RunChecksRequest, actor: WriterUser, session: Db) -> RunChecksResponse:
+    """Запуск сравнения. Пустое тело проверяет все установки."""
     if actor_role(actor) == RoleCode.CLIENT:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     created, skipped = await run_version_checks(
@@ -44,6 +48,7 @@ async def list_outdated(
     q: str | None = Query(default=None, max_length=255),
     client_id: UUID | None = None,
 ):
+    """Клиенты, у которых установленный релиз не актуален. Считается по каталогу, а не по архиву."""
     if client_id is not None:
         await get_client(session, client_id)
     return await outdated_report(session, q=q, client_id=client_id)
@@ -60,6 +65,7 @@ async def list_checks(
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> Page[VersionCheckRead]:
+    """Архив проверок с фильтрами."""
     stmt = select(VersionCheck).join(
         ClientConfiguration,
         ClientConfiguration.id == VersionCheck.client_configuration_id,
@@ -95,6 +101,7 @@ async def list_checks(
 
 @router.get("/{check_id}", response_model=VersionCheckRead, summary="2.3 One saved version check")
 async def read_check(check_id: UUID, actor: CurrentUser, session: Db) -> VersionCheckRead:
+    """Одна сохранённая проверка."""
     row = await session.scalar(
         select(VersionCheck).where(VersionCheck.id == check_id).options(*check_load_options())
     )

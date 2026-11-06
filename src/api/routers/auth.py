@@ -1,3 +1,5 @@
+"""Вход по почте и паролю и карточка текущего пользователя."""
+
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse, summary="Sign in and receive a bearer token")
 async def login(payload: LoginRequest, session: Db) -> TokenResponse:
+    """Сверяет пароль и отдаёт токен. Неверный пароль — 401, отключённый пользователь — 403."""
     user = await session.scalar(
         select(User)
         .where(User.email == payload.email)
@@ -34,4 +37,5 @@ async def login(payload: LoginRequest, session: Db) -> TokenResponse:
 
 @router.get("/me", summary="Current user")
 async def me(user: CurrentUser):
+    """Карточка владельца токена."""
     return user_read(user)

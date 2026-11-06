@@ -1,3 +1,5 @@
+"""Организация-клиент и сотрудник, который её ведёт."""
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
 
 
 class Client(TimestampMixin, Base):
+    """Организация. responsible_employee_id — специалист, который ведёт этого клиента."""
     __tablename__ = "clients"
 
     id: Mapped[uuid.UUID] = mapped_column(

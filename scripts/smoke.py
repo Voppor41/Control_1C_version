@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise the MVP after migrate + seed.
+"""Повторный прогон основных сценариев ТЗ после миграции и наполнения.
 
-Usage:
-    python scripts/smoke.py
-    BASE_URL=http://127.0.0.1:8000 python scripts/smoke.py
+Запуск: python scripts/smoke.py
+Адрес задаётся переменной BASE_URL, по умолчанию http://127.0.0.1:8000.
 """
+
 
 from __future__ import annotations
 
@@ -22,10 +22,12 @@ STAMP = int(time.time())
 
 
 class SmokeError(SystemExit):
+    """Останавливает прогон с ненулевым кодом и текстом, какой шаг сломался."""
     pass
 
 
 def request(method: str, path: str, token: str | None = None, body=None, expected: int | tuple[int, ...] = 200):
+    """HTTP-запрос к API. expected — допустимые коды, тело разбирается как JSON."""
     headers = {"Accept": "application/json"}
     data = None
     if body is not None:
@@ -51,10 +53,12 @@ def request(method: str, path: str, token: str | None = None, body=None, expecte
 
 
 def ok(label: str) -> None:
+    """Печатает успешный шаг."""
     print(f"OK {label}")
 
 
 def login(email: str, password: str) -> str:
+    """Возвращает access_token демо-пользователя."""
     payload = request("POST", "/api/auth/login", body={"email": email, "password": password})
     if not payload.get("access_token") or not payload.get("role"):
         raise SmokeError(f"login payload missing token: {payload}")
@@ -62,6 +66,7 @@ def login(email: str, password: str) -> str:
 
 
 def main() -> None:
+    """Проходит требования 1–5 на отдельных данных и читает демо-строки Ромашки и Василька."""
     for _ in range(30):
         try:
             health = request("GET", "/health")

@@ -1,3 +1,5 @@
+"""Доступные даты, выбор даты клиентом и смена статуса заявки сотрудником."""
+
 from collections import defaultdict
 from datetime import date, datetime
 from uuid import UUID
@@ -52,6 +54,7 @@ updates = APIRouter(prefix="/scheduled-updates", tags=["planning"])
 
 
 def _slot_query():
+    """Слот и число неотменённых заявок на нём."""
     booked = (
         select(ScheduledUpdate.slot_id.label("slot_id"), func.count().label("booked"))
         .where(
@@ -69,6 +72,7 @@ def _slot_query():
 
 
 async def _owner_for_create(session, actor: User, specialist_id: UUID | None) -> User:
+    """Специалист создаёт окно себе. Администратор обязан передать specialist_id."""
     if actor_role(actor) == RoleCode.SPECIALIST:
         owner_id = actor.id
     elif specialist_id is None:
@@ -85,6 +89,7 @@ async def _owner_for_create(session, actor: User, specialist_id: UUID | None) ->
 
 @slots.post("", response_model=SlotRead, status_code=201, summary="4.1 Open a date for updates")
 async def create_slot(payload: SlotCreate, actor: WriterUser, session: Db) -> SlotRead:
+    """Новое окно. Повтор того же начала у того же специалиста — 409."""
     owner = await _owner_for_create(session, actor, payload.specialist_id)
     duplicate = await session.scalar(
         select(UpdateSlot.id).where(
@@ -119,6 +124,7 @@ async def available_dates(
     date_from: date | None = None,
     date_to: date | None = None,
 ) -> list[AvailableDate]:
+    """Даты, на которые ещё есть свободные места. Клиент видит только такие."""
     page = await _list_slots(
         session,
         actor=actor,
@@ -154,6 +160,7 @@ async def list_slots(
     specialist_id: UUID | None = None,
     is_active: bool | None = None,
 ) -> Page[SlotRead]:
+    """Список окон. Клиенту принудительно включается available_only."""
     return await _list_slots(
         session,
         actor=actor,
@@ -179,6 +186,7 @@ async def _list_slots(
     specialist_id: UUID | None,
     is_active: bool | None,
 ) -> Page[SlotRead]:
+    """Общая выборка окон для списка и для сводки дат."""
     if actor_role(actor) == RoleCode.CLIENT:
         available_only = True
         is_active = True
@@ -223,6 +231,7 @@ async def _list_slots(
 
 @slots.get("/{slot_id}", response_model=SlotRead, summary="4.1 Get a slot")
 async def read_slot(slot_id: UUID, actor: CurrentUser, session: Db) -> SlotRead:
+    """Одно окно. Клиенту прошедшее или полное окно выглядит как 404."""
     slot = await session.scalar(
         select(UpdateSlot).where(UpdateSlot.id == slot_id).options(selectinload(UpdateSlot.specialist))
     )
@@ -236,6 +245,7 @@ async def read_slot(slot_id: UUID, actor: CurrentUser, session: Db) -> SlotRead:
 
 @slots.patch("/{slot_id}", response_model=SlotRead, summary="4.1 Change slot capacity or availability")
 async def update_slot(slot_id: UUID, payload: SlotUpdate, actor: WriterUser, session: Db) -> SlotRead:
+    """Вместимость и флаг активности. Вместимость нельзя опустить ниже уже занятых мест."""
     slot = await session.scalar(
         select(UpdateSlot).where(UpdateSlot.id == slot_id).options(selectinload(UpdateSlot.specialist))
     )
@@ -259,6 +269,7 @@ async def update_slot(slot_id: UUID, payload: SlotUpdate, actor: WriterUser, ses
 
 
 def _update_filters(stmt, *, status, client_id, date_from, date_to, assigned_specialist_id, q):
+    """Фильтры списка заявок: статус, клиент, специалист, дата слота, подстрока названия."""
     stmt = stmt.join(Client, Client.id == ScheduledUpdate.client_id)
     if status is not None:
         stmt = stmt.where(ScheduledUpdate.status == status)
@@ -279,6 +290,7 @@ def _update_filters(stmt, *, status, client_id, date_from, date_to, assigned_spe
 
 @updates.post("", response_model=ScheduledUpdateDetail, status_code=201, summary="4.2 Pick a date or request an update")
 async def create_update(payload: ScheduledUpdateCreate, actor: CurrentUser, session: Db) -> ScheduledUpdateDetail:
+    """Заявка. slot_id сразу ставит статус scheduled."""
     row = await create_scheduled_update(
         session,
         actor=actor,
@@ -303,6 +315,7 @@ async def list_updates(
     assigned_specialist_id: UUID | None = None,
     q: str | None = Query(default=None, max_length=255),
 ) -> Page[ScheduledUpdateRead]:
+    """Список заявок. Клиент видит только свои."""
     if actor_role(actor) == RoleCode.CLIENT:
         if client_id is not None:
             ensure_client_scope(actor, client_id)
@@ -341,6 +354,7 @@ async def list_updates(
 
 @updates.get("/{update_id}", response_model=ScheduledUpdateDetail, summary="4.3–4.4 View an update and its status history")
 async def read_update(update_id: UUID, actor: CurrentUser, session: Db) -> ScheduledUpdateDetail:
+    """Заявка и история статусов."""
     row = await get_scheduled_update(session, update_id, with_history=True)
     ensure_can_view(actor, row)
     return scheduled_update_detail(row)
@@ -353,6 +367,7 @@ async def patch_update(
     actor: CurrentUser,
     session: Db,
 ) -> ScheduledUpdateDetail:
+    """Смена выбранной даты или комментария, пока работу ещё не начали."""
     row = await get_scheduled_update(session, update_id, with_history=True)
     ensure_can_view(actor, row)
     if payload.slot_id is None and payload.comment is None:
@@ -375,6 +390,7 @@ async def patch_status(
     actor: WriterUser,
     session: Db,
 ) -> ScheduledUpdateDetail:
+    """Смена статуса сотрудником сопровождения."""
     row = await get_scheduled_update(session, update_id, with_history=True)
     await change_status(session, row, actor=actor, new_status=payload.status, comment=payload.comment)
     await commit_session(session)

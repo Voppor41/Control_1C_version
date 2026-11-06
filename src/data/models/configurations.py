@@ -1,3 +1,5 @@
+"""Каталог конфигураций 1С и выпуски. Признак is_current единственный на конфигурацию."""
+
 import uuid
 from datetime import date
 from typing import TYPE_CHECKING, Optional
@@ -15,6 +17,7 @@ if TYPE_CHECKING:
 
 
 class Configuration(TimestampMixin, Base):
+    """Типовая конфигурация 1С, например «Бухгалтерия предприятия»."""
     __tablename__ = "configurations"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -36,6 +39,7 @@ class Configuration(TimestampMixin, Base):
 
 
 class ConfigurationVersion(TimestampMixin, Base):
+    """Конкретный релиз. Частичный уникальный индекс не даёт двум is_current на одну конфигурацию."""
     __tablename__ = "configuration_versions"
     __table_args__ = (
         UniqueConstraint("configuration_id", "version", name="uq_configuration_version"),

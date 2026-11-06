@@ -1,3 +1,5 @@
+"""Сборка схем ответа из ORM-объектов. Связи должны быть загружены заранее."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -31,6 +33,7 @@ from src.data.models import (
 
 
 def user_read(user: User) -> UserRead:
+    """Карточка пользователя без хеша пароля."""
     return UserRead(
         id=user.id,
         full_name=user.full_name,
@@ -46,6 +49,7 @@ def user_read(user: User) -> UserRead:
 
 
 def client_read(client: Client) -> ClientRead:
+    """Карточка организации и имя ответственного, если он загружен."""
     employee = client.responsible_employee
     return ClientRead(
         id=client.id,
@@ -60,6 +64,7 @@ def client_read(client: Client) -> ClientRead:
 
 
 def configuration_read(row: Configuration, current: str | None) -> ConfigurationRead:
+    """Каталожная конфигурация и строка актуального релиза."""
     return ConfigurationRead(
         id=row.id,
         name=row.name,
@@ -71,6 +76,7 @@ def configuration_read(row: Configuration, current: str | None) -> Configuration
 
 
 def configuration_detail(row: Configuration, versions: list[ConfigurationVersion]) -> ConfigurationDetail:
+    """То же плюс список релизов."""
     current = next((item.version for item in versions if item.is_current), None)
     base = configuration_read(row, current)
     return ConfigurationDetail(
@@ -84,6 +90,7 @@ def installation_read(
     current: ConfigurationVersion | None,
     last_checked_at: datetime | None,
 ) -> ClientConfigurationRead:
+    """Установка, актуальный релиз и признак устаревания."""
     installed = row.installed_version
     return ClientConfigurationRead(
         id=row.id,
@@ -95,6 +102,7 @@ def installation_read(
         installed_version=installed.version,
         current_version_id=current.id if current is not None else None,
         current_version=current.version if current is not None else None,
+        # None, если в каталоге ещё не отмечен актуальный релиз: сравнивать не с чем.
         is_outdated=(installed.id != current.id) if current is not None else None,
         infobase_name=row.infobase_name,
         last_checked_at=last_checked_at,
@@ -104,6 +112,7 @@ def installation_read(
 
 
 def version_check_read(row: VersionCheck) -> VersionCheckRead:
+    """Одна сохранённая проверка человекочитаемыми номерами версий."""
     installation = row.client_configuration
     return VersionCheckRead(
         id=row.id,
@@ -123,6 +132,7 @@ def version_check_read(row: VersionCheck) -> VersionCheckRead:
 
 
 def notification_read(row: Notification) -> NotificationRead:
+    """Уведомление с названием организации и конфигурации."""
     configuration_name = None
     if row.client_configuration is not None and row.client_configuration.configuration is not None:
         configuration_name = row.client_configuration.configuration.name
@@ -144,6 +154,7 @@ def notification_read(row: Notification) -> NotificationRead:
 
 
 def slot_read(row: UpdateSlot, booked: int) -> SlotRead:
+    """Окно и остаток мест: capacity минус уже занятые."""
     remaining = max(row.capacity - booked, 0)
     return SlotRead(
         id=row.id,
@@ -160,6 +171,7 @@ def slot_read(row: UpdateSlot, booked: int) -> SlotRead:
 
 
 def status_event_read(row: UpdateStatusHistory) -> StatusEventRead:
+    """Строка истории статуса."""
     return StatusEventRead(
         id=row.id,
         old_status=row.old_status,
@@ -172,6 +184,7 @@ def status_event_read(row: UpdateStatusHistory) -> StatusEventRead:
 
 
 def scheduled_update_read(row: ScheduledUpdate) -> ScheduledUpdateRead:
+    """Заявка без истории."""
     installation = row.client_configuration
     slot = row.slot
     return ScheduledUpdateRead(
@@ -204,6 +217,7 @@ def scheduled_update_read(row: ScheduledUpdate) -> ScheduledUpdateRead:
 
 
 def scheduled_update_detail(row: ScheduledUpdate) -> ScheduledUpdateDetail:
+    """Заявка с историей статусов."""
     base = scheduled_update_read(row)
     return ScheduledUpdateDetail(
         **base.model_dump(),
@@ -212,6 +226,7 @@ def scheduled_update_detail(row: ScheduledUpdate) -> ScheduledUpdateDetail:
 
 
 def update_brief(row: ScheduledUpdate) -> UpdateBrief:
+    """Короткая строка для отчёта план/факт."""
     return UpdateBrief(
         id=row.id,
         status=row.status,
@@ -225,4 +240,5 @@ def update_brief(row: ScheduledUpdate) -> UpdateBrief:
 
 
 def ids(values: list[UUID]) -> set[UUID]:
+    """Множество идентификаторов без повторов."""
     return set(values)

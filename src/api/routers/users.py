@@ -1,3 +1,5 @@
+"""Регистрация пользователей и назначение ролей. Пишет только администратор."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
@@ -16,10 +18,12 @@ router = APIRouter(tags=["users"])
 
 
 def _user_options():
+    """Роль и организация пользователя для ответа."""
     return (selectinload(User.role), selectinload(User.client))
 
 
 async def _load_user(session, user_id: UUID) -> User:
+    """Пользователь по id или 404."""
     user = await session.scalar(select(User).where(User.id == user_id).options(*_user_options()))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -27,6 +31,7 @@ async def _load_user(session, user_id: UUID) -> User:
 
 
 async def _validate_role_link(session, role: RoleCode, client_id: UUID | None) -> None:
+    """Роль «клиент» обязана иметь client_id. Сотрудник не должен быть привязан к организации."""
     if role == RoleCode.CLIENT and client_id is None:
         raise HTTPException(status_code=422, detail="Client role requires client_id")
     if role != RoleCode.CLIENT and client_id is not None:
@@ -36,6 +41,7 @@ async def _validate_role_link(session, role: RoleCode, client_id: UUID | None) -
 
 
 async def _guard_last_admin(session, target: User, actor: User, payload: UserUpdate) -> None:
+    """Нельзя снять или отключить последнего активного администратора и самого себя."""
     if target.id == actor.id and payload.is_active is False:
         raise HTTPException(status_code=422, detail="You cannot deactivate yourself")
     if target.id == actor.id and payload.role not in (None, RoleCode.ADMIN):
@@ -60,11 +66,13 @@ async def _guard_last_admin(session, target: User, actor: User, payload: UserUpd
 
 @router.get("/roles", response_model=list[RoleRead], summary="1.1 List roles")
 async def list_roles(_user: StaffUser, session: Db) -> list[Role]:
+    """Справочник ролей для формы назначения."""
     return list((await session.scalars(select(Role).order_by(Role.code))).all())
 
 
 @router.post("/users", response_model=UserRead, status_code=201, summary="1.1 Register a user and assign a role")
 async def create_user(payload: UserCreate, _actor: AdminUser, session: Db) -> UserRead:
+    """Регистрация учётки. Почта приводится к нижнему регистру."""
     await _validate_role_link(session, payload.role, payload.client_id)
     existing = await session.scalar(select(User.id).where(User.email == payload.email))
     if existing is not None:
@@ -94,6 +102,7 @@ async def list_users(
     role: RoleCode | None = None,
     is_active: bool | None = None,
 ) -> Page[UserRead]:
+    """Поиск сотрудников по имени, почте, роли и активности."""
     stmt = select(User).join(Role, User.role_id == Role.id)
     if q and q.strip():
         pattern = like_pattern(q.strip())
@@ -128,6 +137,7 @@ async def list_users(
 
 @router.get("/users/{user_id}", response_model=UserRead, summary="1.1 Get a user")
 async def get_user(user_id: UUID, actor: CurrentUser, session: Db) -> UserRead:
+    """Карточка. Клиент может открыть только себя."""
     if actor.role.code == RoleCode.CLIENT and actor.id != user_id:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     if actor.role.code == RoleCode.CLIENT or actor.role.code in (
@@ -141,6 +151,7 @@ async def get_user(user_id: UUID, actor: CurrentUser, session: Db) -> UserRead:
 
 @router.patch("/users/{user_id}", response_model=UserRead, summary="1.1 Assign a role or update access")
 async def update_user(user_id: UUID, payload: UserUpdate, actor: AdminUser, session: Db) -> UserRead:
+    """Смена роли, активности, пароля и привязки к клиенту."""
     target = await _load_user(session, user_id)
     await _guard_last_admin(session, target, actor, payload)
     if payload.full_name is not None:

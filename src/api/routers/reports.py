@@ -1,3 +1,5 @@
+"""Отчёты для администратора и руководителя отдела сопровождения."""
+
 from datetime import date
 from uuid import UUID
 
@@ -20,6 +22,7 @@ async def updated_clients(
     date_to: date | None = None,
     q: str | None = Query(default=None, max_length=255),
 ) -> UpdatedClientsReport:
+    """Кто уже обновлён и с какой версии на какую."""
     return await updated_clients_report(session, date_from=date_from, date_to=date_to, q=q)
 
 
@@ -31,6 +34,7 @@ async def updates(
     date_to: date | None = None,
     q: str | None = Query(default=None, max_length=255),
 ) -> UpdatesReport:
+    """Сколько заявок запланировано и сколько выполнено, плюс сами строки."""
     return await updates_summary(session, date_from=date_from, date_to=date_to, q=q)
 
 
@@ -41,6 +45,7 @@ async def outdated_clients(
     q: str | None = Query(default=None, max_length=255),
     client_id: UUID | None = None,
 ) -> OutdatedReport:
+    """Кому ещё нужно обновление. Тот же расчёт, что у специалиста, но для руководителя."""
     if client_id is not None:
         await get_client(session, client_id)
     return await outdated_report(session, q=q, client_id=client_id)

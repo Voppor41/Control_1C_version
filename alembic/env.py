@@ -1,3 +1,5 @@
+"""Окружение Alembic: берёт URL из настроек приложения и сравнивает метаданные моделей."""
+
 import asyncio
 from logging.config import fileConfig
 
@@ -20,6 +22,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    """Печатает SQL, не подключаясь к серверу."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -34,6 +37,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    """Запускает миграции на уже открытом синхронном соединении."""
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -45,6 +49,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    """Открывает async-движок и отдаёт соединение в do_run_migrations."""
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -59,6 +64,7 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
+    """Обычный путь alembic upgrade: через asyncio."""
     asyncio.run(run_async_migrations())
 
 

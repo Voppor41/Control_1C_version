@@ -1,3 +1,5 @@
+"""Точка входа HTTP. При старте ждёт базу и наполняет роли, затем отдаёт /health и /api."""
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -14,6 +16,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Перед приёмом запросов наполняет базу, при остановке закрывает пул."""
     await init_db()
     yield
     await dispose_engine()
@@ -44,4 +47,5 @@ app.include_router(api_router)
 
 @app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
+    """Короткий указатель на /health и /docs. В схему OpenAPI не входит."""
     return {"app": settings.app_name, "health": "/health", "docs": "/docs"}

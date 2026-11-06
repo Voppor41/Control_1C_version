@@ -1,3 +1,5 @@
+"""Учётная запись. У роли «клиент» заполнен client_id, у сотрудников он пустой."""
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 
 
 class User(TimestampMixin, Base):
+    """Человек с паролем и одной ролью. client_id связывает портального пользователя с организацией."""
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(

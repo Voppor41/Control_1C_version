@@ -1,3 +1,5 @@
+"""Уведомления портальным пользователям клиента. Без такого пользователя явное уведомление не создаётся."""
+
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -18,6 +20,7 @@ from src.services.common import flush_session
 
 
 def notification_options():
+    """Клиент и конфигурация для текста ответа."""
     return (
         selectinload(Notification.client),
         selectinload(Notification.client_configuration).selectinload(ClientConfiguration.configuration),
@@ -36,6 +39,11 @@ async def notify_client_users(
     scheduled_update_id: UUID | None = None,
     strict: bool = False,
 ) -> list[Notification]:
+    """Кладёт одно и то же сообщение каждому активному пользователю с ролью «клиент» у этой организации.
+
+    Параметры:
+        strict: если получателей нет, при True — ошибка 422, при False — тихий пропуск.
+    """
     recipients = list(
         (
             await session.scalars(
@@ -84,6 +92,7 @@ async def create_update_notification(
     title: str | None,
     message: str | None,
 ) -> list[Notification]:
+    """Уведомление «пора обновиться». Текст строится по установке, если сообщение не передали."""
     client = await get_client(session, client_id)
     installation = None
     if client_configuration_id is not None:

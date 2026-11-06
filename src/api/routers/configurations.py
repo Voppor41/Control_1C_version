@@ -1,3 +1,5 @@
+"""Каталог конфигураций 1С и их релизы. Актуальный релиз в каталоге один."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -31,6 +33,7 @@ router = APIRouter(prefix="/configurations", tags=["configurations"])
 
 
 async def _reads(session: AsyncSession, rows: list[Configuration]) -> list[ConfigurationRead]:
+    """Список конфигураций с подставленной строкой актуального релиза."""
     currents = await map_current_versions(session, {row.id for row in rows})
     return [
         configuration_read(row, currents[row.id].version if row.id in currents else None) for row in rows
@@ -39,6 +42,7 @@ async def _reads(session: AsyncSession, rows: list[Configuration]) -> list[Confi
 
 @router.post("", response_model=ConfigurationRead, status_code=201, summary="1.3 Create a configuration")
 async def create_configuration(payload: ConfigurationCreate, _actor: WriterUser, session: Db) -> ConfigurationRead:
+    """Новая запись каталога."""
     existing = await session.scalar(select(Configuration.id).where(Configuration.name == payload.name))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Configuration with this name already exists")
@@ -56,6 +60,7 @@ async def list_configurations(
     page: PageDep,
     q: str | None = Query(default=None, max_length=255),
 ) -> Page[ConfigurationRead]:
+    """Поиск каталога по имени."""
     stmt = select(Configuration)
     if q and q.strip():
         stmt = stmt.where(Configuration.name.ilike(like_pattern(q.strip()), escape="\\"))
@@ -72,6 +77,7 @@ async def list_configurations(
 
 @router.get("/{configuration_id}", response_model=ConfigurationDetail, summary="1.3 Configuration and its versions")
 async def read_configuration(configuration_id: UUID, _actor: CurrentUser, session: Db) -> ConfigurationDetail:
+    """Конфигурация и все её релизы."""
     row = await get_configuration(session, configuration_id)
     return configuration_detail(row, await list_versions(session, row.id))
 
@@ -83,6 +89,7 @@ async def update_configuration(
     _actor: WriterUser,
     session: Db,
 ) -> ConfigurationDetail:
+    """Название и описание."""
     row = await get_configuration(session, configuration_id)
     if payload.name is not None:
         row.name = payload.name
@@ -96,6 +103,7 @@ async def update_configuration(
 
 @router.delete("/{configuration_id}", status_code=204, summary="1.3 Delete an unused configuration")
 async def delete_configuration(configuration_id: UUID, _actor: WriterUser, session: Db) -> Response:
+    """Удаление, только если конфигурацию ещё никому не ставили."""
     row = await get_configuration(session, configuration_id)
     used = await session.scalar(
         select(func.count())
@@ -121,6 +129,7 @@ async def create_version(
     _actor: WriterUser,
     session: Db,
 ) -> VersionRead:
+    """Новый релиз. Если актуального ещё нет, этот релиз становится актуальным."""
     configuration = await get_configuration(session, configuration_id)
     existing = await session.scalar(
         select(ConfigurationVersion.id).where(
@@ -160,6 +169,7 @@ async def update_version(
     _actor: WriterUser,
     session: Db,
 ) -> VersionRead:
+    """Дата, заметка или смена флага актуальности."""
     await get_configuration(session, configuration_id)
     version = await session.get(ConfigurationVersion, version_id)
     if version is None or version.configuration_id != configuration_id:
@@ -187,6 +197,7 @@ async def delete_version(
     _actor: WriterUser,
     session: Db,
 ) -> Response:
+    """Удаление релиза, на который никто не ссылается. Актуальный сначала нужно сменить."""
     await get_configuration(session, configuration_id)
     version = await session.get(ConfigurationVersion, version_id)
     if version is None or version.configuration_id != configuration_id:

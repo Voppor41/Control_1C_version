@@ -1,3 +1,5 @@
+"""Реестр ORM-моделей. Импорт пакета регистрирует таблицы для Alembic."""
+
 from .client_configurations import ClientConfiguration
 from .clients import Client
 from .configurations import Configuration, ConfigurationVersion

@@ -1,3 +1,5 @@
+"""Асинхронный движок SQLAlchemy и сессия запроса. При старте проверяет БД и наполняет справочники."""
+
 import logging
 from typing import AsyncGenerator
 
@@ -11,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
+    """Базовый класс моделей. metadata отсюда забирает Alembic."""
     pass
 
 
@@ -29,6 +32,7 @@ async_session = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Сессия одного запроса. При ошибке откатывает транзакцию и пробрасывает исключение дальше."""
     async with async_session() as session:
         try:
             yield session
@@ -38,6 +42,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
+    """Проверяет соединение и наполняет роли. Демо-данные — только если should_seed_demo.
+
+    Исключения:
+        RuntimeError, если база недоступна или таблицы ещё не созданы миграцией.
+    """
     from src.core.config import settings
     from src.data.seed import seed_demo_data, seed_initial_data
 
@@ -62,4 +71,5 @@ async def init_db() -> None:
 
 
 async def dispose_engine() -> None:
+    """Закрывает пул соединений при остановке процесса."""
     await engine.dispose()

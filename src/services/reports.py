@@ -1,3 +1,5 @@
+"""Отчёты руководителя: обновлённые клиенты, план против факта и устаревшие конфигурации."""
+
 from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import and_, cast, func, or_, select
@@ -22,10 +24,12 @@ from src.data.models import (
 )
 from src.services.common import like_pattern
 
+# Ещё не сделано и не отменено. in_progress тоже «в плане»: работа начата, но отчёт факта — только completed.
 PLANNED = (UpdateStatus.REQUESTED, UpdateStatus.SCHEDULED, UpdateStatus.IN_PROGRESS)
 
 
 def _completed_bounds(date_from: date | None, date_to: date | None) -> list:
+    """Границы календарных суток по completed_at, в UTC."""
     conds = []
     if date_from is not None:
         conds.append(
@@ -47,6 +51,7 @@ async def updated_clients_report(
     date_to: date | None,
     q: str | None,
 ) -> UpdatedClientsReport:
+    """Отчёт 5.1: клиенты с выполненными заявками и версии «с» и «на»."""
     stmt = (
         select(ScheduledUpdate)
         .join(Client, Client.id == ScheduledUpdate.client_id)
@@ -104,6 +109,7 @@ async def updates_summary(
     date_to: date | None,
     q: str | None,
 ) -> UpdatesReport:
+    """Отчёт 5.2. Запланированные — requested, scheduled и in_progress. Выполненные считаются отдельно."""
     slot_or_created = func.coalesce(UpdateSlot.slot_date, cast(ScheduledUpdate.created_at, Date))
     stmt = (
         select(ScheduledUpdate)
@@ -125,6 +131,8 @@ async def updates_summary(
         if date_to is not None:
             other.append(slot_or_created <= date_to)
         completed = _completed_bounds(date_from, date_to)
+        # Выполненные фильтруем по дате завершения, остальные — по дате слота
+        # или по дню создания, если дату ещё не выбрали.
         stmt = stmt.where(
             or_(
                 and_(ScheduledUpdate.status == UpdateStatus.COMPLETED, *completed),

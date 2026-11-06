@@ -1,10 +1,10 @@
-"""store source and target versions on scheduled updates
+"""Добавляет к заявке исходную и целевую версии, чтобы отчёт показывал, с какого релиза на какой перешли.
 
 Revision ID: 20261105_0002
 Revises: 20261102_0001
 Create Date: 2026-11-05
-
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -20,6 +20,7 @@ uuid_pk = postgresql.UUID(as_uuid=True)
 
 
 def upgrade() -> None:
+    """Колонки source_version_id и target_version_id и индекс по completed_at."""
     op.add_column(
         "scheduled_updates",
         sa.Column("source_version_id", uuid_pk, nullable=True),
@@ -65,6 +66,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Убирает эти колонки и индекс."""
     op.drop_index("ix_scheduled_updates_completed_at", table_name="scheduled_updates")
     op.drop_index(op.f("ix_scheduled_updates_target_version_id"), table_name="scheduled_updates")
     op.drop_index(op.f("ix_scheduled_updates_source_version_id"), table_name="scheduled_updates")

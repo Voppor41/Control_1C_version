@@ -1,3 +1,5 @@
+"""Собирает маршруты под префиксом /api. Проверка живости живёт отдельно, на /health."""
+
 from fastapi import APIRouter
 
 from src.api.routers import auth, checks, clients, configurations, installations, notifications, planning, reports, users

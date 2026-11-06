@@ -1,3 +1,5 @@
+"""Заявка на обновление, выбранное окно и история смены статуса."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
 
 
 class ScheduledUpdate(TimestampMixin, Base):
+    """Заявка. source_version_id — что стояло при создании, target_version_id — на что обновляем."""
     __tablename__ = "scheduled_updates"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -104,6 +107,7 @@ class ScheduledUpdate(TimestampMixin, Base):
 
 
 class UpdateStatusHistory(Base):
+    """Кто и когда сменил статус. Старые строки не редактируются."""
     __tablename__ = "update_status_history"
 
     id: Mapped[uuid.UUID] = mapped_column(

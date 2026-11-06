@@ -1,3 +1,5 @@
+"""Окно специалиста: дата, время и сколько заявок оно ещё вмещает."""
+
 import uuid
 from datetime import date, time
 from typing import TYPE_CHECKING
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
 
 
 class UpdateSlot(TimestampMixin, Base):
+    """Интервал, когда специалист может провести обновление. Уникален по специалисту, дате и времени начала."""
     __tablename__ = "update_slots"
     __table_args__ = (
         UniqueConstraint(

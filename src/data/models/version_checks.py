@@ -1,3 +1,5 @@
+"""Снимок сравнения: что было установлено, что было актуальным и устарело ли."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -15,6 +17,7 @@ if TYPE_CHECKING:
 
 
 class VersionCheck(Base):
+    """История сравнения. Строка не переписывается: новый запуск проверки добавляет ещё одну."""
     __tablename__ = "version_checks"
 
     id: Mapped[uuid.UUID] = mapped_column(

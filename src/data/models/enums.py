@@ -1,10 +1,20 @@
+"""Коды ролей, статусы заявки и типы уведомлений. В базу пишется значение, а не имя константы."""
+
 from enum import Enum
 
 from sqlalchemy import Enum as SAEnum
 
 
 def persisted_enum(enum_cls: type[Enum], name: str) -> SAEnum:
-    """Store enum values (``admin``) rather than member names (``ADMIN``)."""
+    """Колонка-строка для str-перечисления.
+
+    Параметры:
+        enum_cls: класс перечисления.
+        name: имя типа в метаданных, не тип PostgreSQL.
+
+    Возвращает:
+        Тип SQLAlchemy, который пишет значение (admin), а не имя (ADMIN).
+    """
 
     return SAEnum(
         enum_cls,
@@ -16,6 +26,7 @@ def persisted_enum(enum_cls: type[Enum], name: str) -> SAEnum:
 
 
 class RoleCode(str, Enum):
+    """Кто работает в системе: администратор, специалист, руководитель, клиент."""
     ADMIN = "admin"
     SPECIALIST = "specialist"
     MANAGER = "manager"
@@ -23,6 +34,7 @@ class RoleCode(str, Enum):
 
 
 class UpdateStatus(str, Enum):
+    """Жизненный цикл заявки от запроса до выполнения или отмены."""
     REQUESTED = "requested"
     SCHEDULED = "scheduled"
     IN_PROGRESS = "in_progress"
@@ -31,6 +43,7 @@ class UpdateStatus(str, Enum):
 
 
 class NotificationType(str, Enum):
+    """О чём письмо в ленте клиента: доступно обновление, назначена дата, выполнено, отменено."""
     UPDATE_AVAILABLE = "update_available"
     UPDATE_SCHEDULED = "update_scheduled"
     UPDATE_COMPLETED = "update_completed"

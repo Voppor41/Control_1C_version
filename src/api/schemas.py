@@ -1,3 +1,5 @@
+"""Схемы тел запросов и ответов REST API."""
+
 from datetime import date, datetime, time
 from typing import Generic, TypeVar
 from uuid import UUID
@@ -10,6 +12,7 @@ T = TypeVar("T")
 
 
 class Page(BaseModel, Generic[T]):
+    """Страница списка: элементы, сколько их всего, limit и offset."""
     items: list[T]
     total: int
     limit: int
@@ -17,6 +20,7 @@ class Page(BaseModel, Generic[T]):
 
 
 class RoleRead(BaseModel):
+    """Роль из справочника."""
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -25,6 +29,7 @@ class RoleRead(BaseModel):
 
 
 class UserRead(BaseModel):
+    """Пользователь без пароля."""
     id: UUID
     full_name: str
     email: EmailStr
@@ -38,6 +43,7 @@ class UserRead(BaseModel):
 
 
 class UserCreate(BaseModel):
+    """Регистрация. Для роли client обязателен client_id."""
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=1, max_length=255)
@@ -62,6 +68,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    """Частичное изменение. Нет поля в JSON — колонка не меняется."""
     model_config = ConfigDict(extra="forbid")
 
     full_name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -81,6 +88,7 @@ class UserUpdate(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """Результат входа: токен, срок в секундах, роль и карточка."""
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -89,6 +97,7 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    """Почта и пароль."""
     model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
@@ -101,6 +110,7 @@ class LoginRequest(BaseModel):
 
 
 class ClientRead(BaseModel):
+    """Организация-клиент."""
     id: UUID
     company_name: str
     phone: str
@@ -112,6 +122,7 @@ class ClientRead(BaseModel):
 
 
 class ClientCreate(BaseModel):
+    """Новый клиент."""
     model_config = ConfigDict(extra="forbid")
 
     company_name: str = Field(min_length=1, max_length=255)
@@ -131,6 +142,7 @@ class ClientCreate(BaseModel):
 
 
 class ClientUpdate(BaseModel):
+    """Правка клиента. responsible_employee_id: null снимает ответственного."""
     model_config = ConfigDict(extra="forbid")
 
     company_name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -154,6 +166,7 @@ class ClientUpdate(BaseModel):
 
 
 class VersionRead(BaseModel):
+    """Релиз конфигурации."""
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -167,6 +180,7 @@ class VersionRead(BaseModel):
 
 
 class ConfigurationRead(BaseModel):
+    """Конфигурация каталога и номер актуального релиза."""
     id: UUID
     name: str
     description: str | None
@@ -176,10 +190,12 @@ class ConfigurationRead(BaseModel):
 
 
 class ConfigurationDetail(ConfigurationRead):
+    """Конфигурация со всеми релизами."""
     versions: list[VersionRead]
 
 
 class ConfigurationCreate(BaseModel):
+    """Новая конфигурация каталога."""
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
@@ -192,6 +208,7 @@ class ConfigurationCreate(BaseModel):
 
 
 class ConfigurationUpdate(BaseModel):
+    """Название или описание."""
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -206,6 +223,7 @@ class ConfigurationUpdate(BaseModel):
 
 
 class VersionCreate(BaseModel):
+    """Новый релиз. Первый в каталоге становится актуальным сам."""
     model_config = ConfigDict(extra="forbid")
 
     version: str = Field(min_length=1, max_length=64)
@@ -220,6 +238,7 @@ class VersionCreate(BaseModel):
 
 
 class VersionUpdate(BaseModel):
+    """Дата выпуска, заметка или признак актуальности."""
     model_config = ConfigDict(extra="forbid")
 
     released_at: date | None = None
@@ -228,6 +247,7 @@ class VersionUpdate(BaseModel):
 
 
 class ClientConfigurationRead(BaseModel):
+    """Установка у клиента: что стоит и что актуально."""
     id: UUID
     client_id: UUID
     company_name: str
@@ -245,6 +265,7 @@ class ClientConfigurationRead(BaseModel):
 
 
 class ClientConfigurationCreate(BaseModel):
+    """Привязка конфигурации и выбранного релиза к клиенту."""
     model_config = ConfigDict(extra="forbid")
 
     configuration_id: UUID
@@ -261,6 +282,7 @@ class ClientConfigurationCreate(BaseModel):
 
 
 class ClientConfigurationUpdate(BaseModel):
+    """Новый установленный релиз или имя базы."""
     model_config = ConfigDict(extra="forbid")
 
     installed_version_id: UUID | None = None
@@ -276,6 +298,7 @@ class ClientConfigurationUpdate(BaseModel):
 
 
 class VersionCheckRead(BaseModel):
+    """Сохранённый результат сравнения версий."""
     id: UUID
     client_configuration_id: UUID
     client_id: UUID
@@ -292,6 +315,7 @@ class VersionCheckRead(BaseModel):
 
 
 class RunChecksRequest(BaseModel):
+    """Пустой объект проверяет всех. Иначе один клиент или одна установка."""
     model_config = ConfigDict(extra="forbid")
 
     client_id: UUID | None = None
@@ -299,16 +323,19 @@ class RunChecksRequest(BaseModel):
 
 
 class SkippedCheck(BaseModel):
+    """Почему установку не сравнили."""
     client_configuration_id: UUID
     reason: str
 
 
 class RunChecksResponse(BaseModel):
+    """Новые проверки и пропущенные установки."""
     created: list[VersionCheckRead]
     skipped: list[SkippedCheck]
 
 
 class OutdatedConfiguration(BaseModel):
+    """Установка, где релиз отстаёт от актуального."""
     client_configuration_id: UUID
     configuration_id: UUID
     configuration_name: str
@@ -320,6 +347,7 @@ class OutdatedConfiguration(BaseModel):
 
 
 class OutdatedClient(BaseModel):
+    """Клиент и список его устаревших конфигураций."""
     client_id: UUID
     company_name: str
     email: str
@@ -328,12 +356,14 @@ class OutdatedClient(BaseModel):
 
 
 class OutdatedReport(BaseModel):
+    """Сводка «кому нужно обновление»."""
     total_clients: int
     total_configurations: int
     clients: list[OutdatedClient]
 
 
 class NotificationRead(BaseModel):
+    """Одно уведомление."""
     id: UUID
     type: NotificationType
     title: str
@@ -350,6 +380,7 @@ class NotificationRead(BaseModel):
 
 
 class NotificationList(BaseModel):
+    """Лента и счётчик непрочитанных."""
     items: list[NotificationRead]
     total: int
     unread: int
@@ -358,6 +389,7 @@ class NotificationList(BaseModel):
 
 
 class NotificationCreate(BaseModel):
+    """Кому и о какой установке сообщить. message можно не передавать, если указана установка."""
     model_config = ConfigDict(extra="forbid")
 
     client_id: UUID
@@ -367,6 +399,7 @@ class NotificationCreate(BaseModel):
 
 
 class SlotRead(BaseModel):
+    """Окно и остаток мест."""
     id: UUID
     slot_date: date
     start_time: time
@@ -380,6 +413,7 @@ class SlotRead(BaseModel):
 
 
 class SlotCreate(BaseModel):
+    """Дата и интервал. end_time должен быть позже start_time."""
     model_config = ConfigDict(extra="forbid")
 
     slot_date: date
@@ -396,6 +430,7 @@ class SlotCreate(BaseModel):
 
 
 class SlotUpdate(BaseModel):
+    """Активность или вместимость."""
     model_config = ConfigDict(extra="forbid")
 
     is_active: bool | None = None
@@ -403,12 +438,14 @@ class SlotUpdate(BaseModel):
 
 
 class AvailableDate(BaseModel):
+    """День, в котором ещё есть свободные окна."""
     slot_date: date
     open_slots: int
     remaining_capacity: int
 
 
 class StatusEventRead(BaseModel):
+    """Факт смены статуса."""
     id: UUID
     old_status: UpdateStatus | None
     new_status: UpdateStatus
@@ -419,6 +456,7 @@ class StatusEventRead(BaseModel):
 
 
 class ScheduledUpdateRead(BaseModel):
+    """Заявка без истории."""
     id: UUID
     status: UpdateStatus
     comment: str | None
@@ -445,10 +483,12 @@ class ScheduledUpdateRead(BaseModel):
 
 
 class ScheduledUpdateDetail(ScheduledUpdateRead):
+    """Заявка и цепочка статусов."""
     status_history: list[StatusEventRead]
 
 
 class ScheduledUpdateCreate(BaseModel):
+    """Новая заявка. Со slot_id она сразу запланирована."""
     model_config = ConfigDict(extra="forbid")
 
     client_configuration_id: UUID
@@ -457,6 +497,7 @@ class ScheduledUpdateCreate(BaseModel):
 
 
 class ScheduledUpdatePatch(BaseModel):
+    """Новая дата или комментарий."""
     model_config = ConfigDict(extra="forbid")
 
     slot_id: UUID | None = None
@@ -464,6 +505,7 @@ class ScheduledUpdatePatch(BaseModel):
 
 
 class StatusChange(BaseModel):
+    """Целевой статус перехода."""
     model_config = ConfigDict(extra="forbid")
 
     status: UpdateStatus
@@ -471,6 +513,7 @@ class StatusChange(BaseModel):
 
 
 class UpdatedConfigurationReport(BaseModel):
+    """Выполненное обновление: было и стало."""
     scheduled_update_id: UUID
     client_configuration_id: UUID
     configuration_name: str
@@ -481,12 +524,14 @@ class UpdatedConfigurationReport(BaseModel):
 
 
 class UpdatedClientReport(BaseModel):
+    """Клиент и его выполненные обновления."""
     client_id: UUID
     company_name: str
     updates: list[UpdatedConfigurationReport]
 
 
 class UpdatedClientsReport(BaseModel):
+    """Отчёт по клиентам, чьи конфигурации обновили."""
     date_from: date | None
     date_to: date | None
     total_clients: int
@@ -495,6 +540,7 @@ class UpdatedClientsReport(BaseModel):
 
 
 class UpdateBrief(BaseModel):
+    """Короткая строка заявки для сводки."""
     id: UUID
     status: UpdateStatus
     client_id: UUID
@@ -506,6 +552,7 @@ class UpdateBrief(BaseModel):
 
 
 class UpdatesReport(BaseModel):
+    """Счётчики плана и факта. planned_count не включает выполненные и отменённые."""
     date_from: date | None
     date_to: date | None
     planned_count: int

@@ -1,3 +1,5 @@
+"""Сравнение установленной версии с актуальной и список клиентов, которым нужно обновление."""
+
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -25,6 +27,15 @@ async def run_version_checks(
     client_id: UUID | None,
     client_configuration_id: UUID | None,
 ) -> tuple[list[VersionCheck], list[dict]]:
+    """Сравнивает установки с актуальным релизом и пишет строки в version_checks.
+
+    Параметры:
+        client_id: ограничить одним клиентом.
+        client_configuration_id: проверить одну установку.
+
+    Возвращает:
+        Созданные проверки и установки, у которых нет актуального релиза.
+    """
     stmt = select(ClientConfiguration).options(*installation_options())
     if client_configuration_id is not None:
         stmt = stmt.where(ClientConfiguration.id == client_configuration_id)
@@ -54,6 +65,7 @@ async def run_version_checks(
             client_configuration_id=installation.id,
             installed_version_id=installation.installed_version_id,
             actual_version_id=current.id,
+            # Номера сравниваем по записи релиза, а не по тексту: актуальным считается is_current.
             is_outdated=installation.installed_version_id != current.id,
             checked_by_id=actor.id,
         )
@@ -65,6 +77,7 @@ async def run_version_checks(
 
 
 def check_load_options():
+    """Связи, нужные карточке проверки: клиент, конфигурация, обе версии, автор."""
     return (
         selectinload(VersionCheck.client_configuration).selectinload(ClientConfiguration.client),
         selectinload(VersionCheck.client_configuration).selectinload(ClientConfiguration.configuration),
@@ -75,6 +88,7 @@ def check_load_options():
 
 
 async def load_checks(session: AsyncSession, checks: list[VersionCheck]) -> list[VersionCheck]:
+    """Перечитывает только что созданные проверки со связями."""
     if not checks:
         return []
     ids = [item.id for item in checks]
@@ -96,6 +110,12 @@ async def outdated_report(
     q: str | None = None,
     client_id: UUID | None = None,
 ) -> OutdatedReport:
+    """Живое сравнение, не архив проверок: установленный id релиза не равен актуальному.
+
+    Параметры:
+        q: подстрока названия клиента, конфигурации или базы.
+        client_id: один клиент.
+    """
     current_version = aliased(ConfigurationVersion)
     installed_version = aliased(ConfigurationVersion)
     stmt = (
@@ -110,6 +130,7 @@ async def outdated_report(
                 current_version.is_current.is_(True),
             ),
         )
+        # Живой список «кому пора»: установленный релиз не тот, что помечен актуальным.
         .where(ClientConfiguration.installed_version_id != current_version.id)
         .order_by(Client.company_name, Configuration.name)
     )

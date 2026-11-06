@@ -1,3 +1,5 @@
+"""Сообщение конкретному пользователю клиента."""
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 
 
 class Notification(TimestampMixin, Base):
+    """Одно сообщение одному получателю. У клиента без портального пользователя строка не появится."""
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(

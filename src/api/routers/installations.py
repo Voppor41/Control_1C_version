@@ -1,3 +1,5 @@
+"""Установленные у клиентов конфигурации и сравнение с актуальным релизом."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -38,6 +40,7 @@ nested = APIRouter(prefix="/clients", tags=["installations"])
 
 
 async def _to_reads(session: AsyncSession, rows: list[ClientConfiguration]) -> list[ClientConfigurationRead]:
+    """Карточки установок: актуальный релиз, признак устаревания и дата последней проверки."""
     currents = await map_current_versions(session, {row.configuration_id for row in rows})
     checks = await map_last_checks(session, {row.id for row in rows})
     return [
@@ -56,6 +59,7 @@ async def list_installations(
     outdated: bool | None = None,
     q: str | None = None,
 ) -> Page[ClientConfigurationRead]:
+    """Общий список установок с фильтрами. Клиенту подставляется его client_id."""
     if actor_role(actor) == RoleCode.CLIENT:
         if actor_client_id(actor) is None:
             return Page(items=[], total=0, limit=page_limit, offset=page_offset)
@@ -126,6 +130,7 @@ async def list_client_configurations(
     outdated: bool | None = None,
     q: str | None = Query(default=None, max_length=255),
 ) -> Page[ClientConfigurationRead]:
+    """Установки одного клиента. Это просмотр из требования 1.4."""
     ensure_client_scope(actor, client_id)
     await get_client(session, client_id)
     return await list_installations(
@@ -151,6 +156,7 @@ async def create_installation(
     _actor: WriterUser,
     session: Db,
 ) -> ClientConfigurationRead:
+    """Ставит конфигурацию клиенту. Пара клиент+конфигурация уникальна."""
     await get_client(session, client_id)
     await get_configuration(session, payload.configuration_id)
     await ensure_version_of_configuration(session, payload.installed_version_id, payload.configuration_id)
@@ -185,6 +191,7 @@ async def search_installations(
     outdated: bool | None = None,
     q: str | None = Query(default=None, max_length=255),
 ) -> Page[ClientConfigurationRead]:
+    """Поиск установок по клиенту, конфигурации, признаку устаревания и строке q."""
     return await list_installations(
         session,
         actor=actor,
@@ -199,6 +206,7 @@ async def search_installations(
 
 @router.get("/{installation_id}", response_model=ClientConfigurationRead, summary="1.4 Get an installation")
 async def read_installation(installation_id: UUID, actor: CurrentUser, session: Db) -> ClientConfigurationRead:
+    """Одна установка."""
     row = await get_installation(session, installation_id)
     ensure_client_scope(actor, row.client_id)
     return (await _to_reads(session, [row]))[0]
@@ -211,6 +219,7 @@ async def update_installation(
     _actor: WriterUser,
     session: Db,
 ) -> ClientConfigurationRead:
+    """Смена установленного релиза или имени базы. Это ручная правка, не выполнение заявки."""
     row = await get_installation(session, installation_id)
     if payload.installed_version_id is not None:
         await ensure_version_of_configuration(
@@ -229,6 +238,7 @@ async def update_installation(
 
 @router.delete("/{installation_id}", status_code=204, summary="1.3 Delete an installation without update history")
 async def delete_installation(installation_id: UUID, _actor: WriterUser, session: Db) -> Response:
+    """Удаление установки без заявок. Проверки версий удалятся вместе с ней."""
     row = await get_installation(session, installation_id)
     used = await session.scalar(
         select(func.count())

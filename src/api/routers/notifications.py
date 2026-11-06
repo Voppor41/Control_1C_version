@@ -1,3 +1,5 @@
+"""Сообщение клиенту о необходимости обновления и просмотр этого сообщения."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 def _visible(actor, stmt, client_id: UUID | None, recipient_id: UUID | None):
+    """Клиент видит только свои сообщения. Сотрудник может сузить ленту клиентом или получателем."""
     if actor_role(actor) == RoleCode.CLIENT:
         return stmt.where(Notification.recipient_id == actor.id)
     if client_id is not None:
@@ -29,6 +32,7 @@ async def create_notification(
     actor: WriterUser,
     session: Db,
 ) -> list[NotificationRead]:
+    """Рассылает уведомление всем портальным пользователям организации."""
     notes = await create_update_notification(
         session,
         actor=actor,
@@ -62,6 +66,7 @@ async def list_notifications(
     client_id: UUID | None = None,
     recipient_id: UUID | None = None,
 ) -> NotificationList:
+    """Лента и число непрочитанных. unread не зависит от фильтра is_read."""
     if actor_role(actor) == RoleCode.CLIENT and client_id not in (None, actor_client_id(actor)):
         raise HTTPException(status_code=403, detail="You can only access your own client data")
     audience = _visible(actor, select(Notification), client_id, recipient_id)
@@ -94,6 +99,7 @@ async def list_notifications(
 
 @router.get("/{notification_id}", response_model=NotificationRead, summary="3.3 Read one notification")
 async def read_notification(notification_id: UUID, actor: CurrentUser, session: Db) -> NotificationRead:
+    """Одно сообщение. Чужое клиенту недоступно."""
     row = await session.scalar(
         select(Notification).where(Notification.id == notification_id).options(*notification_options())
     )
@@ -112,6 +118,7 @@ async def read_notification(notification_id: UUID, actor: CurrentUser, session: 
 
 @router.post("/{notification_id}/read", response_model=NotificationRead, summary="3.3 Mark a notification as read")
 async def mark_read(notification_id: UUID, actor: CurrentUser, session: Db) -> NotificationRead:
+    """Отмечает прочитанным. Это может сделать только получатель."""
     row = await session.scalar(
         select(Notification).where(Notification.id == notification_id).options(*notification_options())
     )

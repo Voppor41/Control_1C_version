@@ -1,3 +1,5 @@
+"""Зависимости FastAPI: текущий пользователь, проверка роли и параметры страницы."""
+
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +18,7 @@ bearer = HTTPBearer(auto_error=False)
 
 
 class PageParams:
+    """limit и offset списка."""
     def __init__(self, limit: int, offset: int) -> None:
         self.limit = limit
         self.offset = offset
@@ -25,6 +28,7 @@ def get_page(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> PageParams:
+    """Разбирает query-параметры страницы. limit не больше 200."""
     return PageParams(limit, offset)
 
 
@@ -36,6 +40,7 @@ async def get_current_user(
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
     session: Db,
 ) -> User:
+    """Пользователь из Bearer-токена. Неактивный и неизвестный получают 401."""
     if creds is None or creds.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=401,
@@ -66,6 +71,11 @@ async def get_current_user(
 
 
 def require(*roles: RoleCode):
+    """Зависимость, которая пускает только перечисленные роли. Иначе 403.
+
+    Администратор и специалист меняют данные, руководитель читает отчёты,
+    клиент ограничен своей организацией на уровне конкретных маршрутов.
+    """
     async def checker(user: User = Depends(get_current_user)) -> User:
         if actor_role(user) not in roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")

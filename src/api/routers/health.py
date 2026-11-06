@@ -1,3 +1,5 @@
+"""Проверка, что процесс жив, база отвечает, роли на месте и демо-пользователи созданы."""
+
 import logging
 
 from fastapi import APIRouter
@@ -17,6 +19,7 @@ REQUIRED_ROLES = {"admin", "specialist", "manager", "client"}
 
 
 async def database_reachable() -> bool:
+    """SELECT 1. False, если соединение не удалось. Текст ошибки наружу не отдаётся."""
     try:
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
@@ -29,6 +32,7 @@ async def database_reachable() -> bool:
 @router.get("/health", summary="Liveness: API process and database")
 @router.get("/api/health", include_in_schema=False)
 async def health():
+    """Живость: процесс и база. 503, если база не отвечает."""
     if not await database_reachable():
         return JSONResponse(
             status_code=503,
@@ -40,6 +44,7 @@ async def health():
 @router.get("/health/ready", summary="Readiness: migrations, roles, demo accounts")
 @router.get("/api/health/ready", include_in_schema=False)
 async def ready():
+    """Готовность: все четыре роли есть. demo_seeded говорит, созданы ли учебные учётки."""
     if not await database_reachable():
         return JSONResponse(
             status_code=503,

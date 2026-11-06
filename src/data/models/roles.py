@@ -1,3 +1,5 @@
+"""Справочник ролей. Код совпадает с RoleCode и не меняется из API."""
+
 import uuid
 from typing import TYPE_CHECKING
 
@@ -15,6 +17,7 @@ if TYPE_CHECKING:
 
 
 class Role(TimestampMixin, Base):
+    """Строка справочника ролей. Пользователи ссылаются на неё, а не хранят код строкой."""
     __tablename__ = "roles"
 
     id: Mapped[uuid.UUID] = mapped_column(

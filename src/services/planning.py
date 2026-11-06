@@ -1,3 +1,5 @@
+"""Окна обновления и заявки: выбор даты, вместимость слота и переходы статуса."""
+
 from datetime import date, datetime, time, timezone
 from uuid import UUID
 
@@ -21,12 +23,15 @@ from src.services.catalog import get_current_version, get_installation
 from src.services.common import actor_role, ensure_client_scope, flush_session
 from src.services.notifications import notify_client_users
 
+# Пока заявка в одном из этих статусов, вторую на ту же установку не создаём.
 OPEN_STATUSES = (
     UpdateStatus.REQUESTED,
     UpdateStatus.SCHEDULED,
     UpdateStatus.IN_PROGRESS,
 )
 
+# Завершённую и отменённую заявку дальше не двигаем.
+# requested можно отменить или поставить на дату; scheduled — начать, отменить или вернуть в запрос.
 ALLOWED_TRANSITIONS = {
     UpdateStatus.REQUESTED: {UpdateStatus.SCHEDULED, UpdateStatus.CANCELLED},
     UpdateStatus.SCHEDULED: {UpdateStatus.IN_PROGRESS, UpdateStatus.CANCELLED, UpdateStatus.REQUESTED},
@@ -39,6 +44,7 @@ WRITERS = {RoleCode.ADMIN, RoleCode.SPECIALIST}
 
 
 def update_options(*, with_history: bool = False):
+    """Связи заявки. with_history=True добавляет цепочку статусов и автора каждой смены."""
     options = [
         selectinload(ScheduledUpdate.client),
         selectinload(ScheduledUpdate.client_configuration).selectinload(ClientConfiguration.configuration),
@@ -62,6 +68,7 @@ async def get_scheduled_update(
     *,
     with_history: bool = False,
 ) -> ScheduledUpdate:
+    """Заявка по id. populate_existing обновляет уже лежащий в сессии объект."""
     row = await session.scalar(
         select(ScheduledUpdate)
         .where(ScheduledUpdate.id == update_id)
@@ -74,10 +81,12 @@ async def get_scheduled_update(
 
 
 def ensure_can_view(user: User, row: ScheduledUpdate) -> None:
+    """Клиент видит только заявки своей организации."""
     ensure_client_scope(user, row.client_id)
 
 
 def ensure_can_book(user: User, installation: ClientConfiguration) -> None:
+    """Дату выбирает клиент для себя или специалист/администратор. Руководитель только смотрит."""
     if actor_role(user) == RoleCode.CLIENT:
         ensure_client_scope(user, installation.client_id)
         return
@@ -91,6 +100,7 @@ async def booked_count(
     *,
     ignore_update_id: UUID | None = None,
 ) -> int:
+    """Сколько неотменённых заявок уже стоят на слот. ignore_update_id не считает саму заявку."""
     stmt = select(func.count()).select_from(ScheduledUpdate).where(
         ScheduledUpdate.slot_id == slot_id,
         ScheduledUpdate.status != UpdateStatus.CANCELLED,
@@ -101,6 +111,7 @@ async def booked_count(
 
 
 def slot_is_past(slot: UpdateSlot, today: date | None = None, now: time | None = None) -> bool:
+    """Окно в прошлом дне или уже закончившееся сегодня."""
     today = today or date.today()
     now = now or datetime.now().time()
     if slot.slot_date < today:
@@ -111,6 +122,7 @@ def slot_is_past(slot: UpdateSlot, today: date | None = None, now: time | None =
 
 
 async def lock_slot(session: AsyncSession, slot_id: UUID) -> UpdateSlot:
+    """Блокирует строку слота, чтобы два запроса не заняли последнее место."""
     slot = (
         await session.execute(select(UpdateSlot).where(UpdateSlot.id == slot_id).with_for_update())
     ).scalar_one_or_none()
@@ -125,6 +137,7 @@ async def ensure_slot_available(
     *,
     ignore_update_id: UUID | None = None,
 ) -> None:
+    """Слот активен, не в прошлом и ещё есть место."""
     if not slot.is_active:
         raise HTTPException(status_code=409, detail="Slot is not active")
     if slot_is_past(slot):
@@ -143,6 +156,7 @@ def add_history(
     comment: str | None,
     actor_id: UUID,
 ) -> None:
+    """Добавляет строку истории, не трогая уже загруженную коллекцию (иначе ленивая подгрузка в async)."""
     session.add(
         UpdateStatusHistory(
             old_status=old_status,
@@ -160,6 +174,7 @@ async def _notify_status(
     kind: NotificationType,
     actor_id: UUID,
 ) -> None:
+    """Письмо клиенту о дате, выполнении или отмене. Смена на in_progress письмом не сопровождается."""
     installation = update.client_configuration
     config_name = installation.configuration.name
     if kind == NotificationType.UPDATE_SCHEDULED and update.slot is not None:
@@ -199,6 +214,10 @@ async def create_scheduled_update(
     slot_id: UUID | None,
     comment: str | None,
 ) -> ScheduledUpdate:
+    """Новая заявка. Со слотом статус сразу scheduled, без слота — requested.
+
+    Вторую открытую заявку на ту же установку не создаёт.
+    """
     installation = await get_installation(session, client_configuration_id)
     ensure_can_book(actor, installation)
     open_update = await session.scalar(
@@ -212,6 +231,7 @@ async def create_scheduled_update(
             status_code=409,
             detail="An open update already exists for this configuration",
         )
+    # Цель фиксируем сейчас: это актуальный релиз каталога, а не «какой появится позже».
     current = await get_current_version(session, installation.configuration_id)
     if current is None:
         raise HTTPException(status_code=422, detail="Configuration has no current version")
@@ -267,6 +287,7 @@ async def assign_slot(
     slot_id: UUID,
     comment: str | None = None,
 ) -> None:
+    """Клиент или сотрудник выбирает дату, пока заявка в requested или scheduled."""
     ensure_can_book(actor, update.client_configuration)
     if actor_role(actor) == RoleCode.CLIENT and update.status not in (
         UpdateStatus.REQUESTED,
@@ -302,6 +323,7 @@ async def assign_slot(
 
 
 async def _apply_completion(session: AsyncSession, update: ScheduledUpdate) -> None:
+    """Ставит на установку целевой релиз и запоминает, с какой версии ушли."""
     installation = update.client_configuration
     target = update.target_version
     if target is None and update.target_version_id is not None:
@@ -312,6 +334,7 @@ async def _apply_completion(session: AsyncSession, update: ScheduledUpdate) -> N
             raise HTTPException(status_code=422, detail="No current version is available to install")
         update.target_version_id = target.id
     if update.source_version_id is None:
+        # Фиксируем, с какой версии ушли, до того как подменим установленный релиз.
         update.source_version_id = installation.installed_version_id
     installation.installed_version_id = target.id
     update.completed_at = datetime.now(timezone.utc)
@@ -326,6 +349,7 @@ async def change_status(
     new_status: UpdateStatus,
     comment: str | None,
 ) -> None:
+    """Переход по таблице ALLOWED_TRANSITIONS. Завершение вызывает _apply_completion."""
     if actor_role(actor) not in WRITERS:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     old = update.status
@@ -343,6 +367,7 @@ async def change_status(
         await ensure_slot_available(session, slot, ignore_update_id=update.id)
         update.assigned_specialist_id = slot.specialist_id
     if new_status == UpdateStatus.REQUESTED:
+        # Возврат в «запрошено» отпускает окно, иначе место останется занятым.
         update.slot_id = None
     if new_status == UpdateStatus.COMPLETED:
         await _apply_completion(session, update)
@@ -363,6 +388,7 @@ async def change_status(
         UpdateStatus.COMPLETED,
         UpdateStatus.CANCELLED,
     ):
+        # Сбрасываем связи: иначе в письме останется старый слот или старая версия из кэша сессии.
         session.expire(update, ["slot", "target_version", "client_configuration"])
         loaded = await get_scheduled_update(session, update.id)
         kind = {

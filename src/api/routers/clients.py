@@ -1,3 +1,5 @@
+"""Карточки организаций-клиентов. Клиентский пользователь видит только свою."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 
 
 def _scoped_client_filter(user, stmt, client_id: UUID | None):
+    """Клиенту оставляет только его организацию. None — у клиента нет привязки, список пуст."""
     if actor_role(user) == RoleCode.CLIENT:
         if actor_client_id(user) is None:
             return None
@@ -35,6 +38,7 @@ def _scoped_client_filter(user, stmt, client_id: UUID | None):
 
 @router.post("", response_model=ClientRead, status_code=201, summary="1.2 Register a client")
 async def create_client(payload: ClientCreate, _actor: WriterUser, session: Db) -> ClientRead:
+    """Новая организация. Ответственный, если указан, должен быть сотрудником."""
     if payload.responsible_employee_id is not None:
         await ensure_staff_user(session, payload.responsible_employee_id)
     duplicate = await session.scalar(
@@ -68,6 +72,7 @@ async def list_clients(
     q: str | None = Query(default=None, max_length=255),
     responsible_employee_id: UUID | None = None,
 ) -> Page[ClientRead]:
+    """Список с поиском по названию, почте и телефону."""
     stmt = select(Client)
     scoped = _scoped_client_filter(actor, stmt, None)
     if scoped is None:
@@ -105,6 +110,7 @@ async def list_clients(
 
 @router.get("/{client_id}", response_model=ClientRead, summary="1.2 Get a client")
 async def read_client(client_id: UUID, actor: CurrentUser, session: Db) -> ClientRead:
+    """Одна организация с проверкой области видимости."""
     ensure_client_scope(actor, client_id)
     return client_read(await get_client(session, client_id))
 
@@ -116,6 +122,7 @@ async def update_client(
     _actor: WriterUser,
     session: Db,
 ) -> ClientRead:
+    """Частичное изменение. Поля вне запроса не затираются."""
     client = await get_client(session, client_id)
     if "responsible_employee_id" in payload.model_fields_set and payload.responsible_employee_id is not None:
         await ensure_staff_user(session, payload.responsible_employee_id)
@@ -134,6 +141,7 @@ async def update_client(
 
 @router.delete("/{client_id}", status_code=204, summary="1.2 Delete a client without update history")
 async def delete_client(client_id: UUID, _actor: WriterUser, session: Db) -> Response:
+    """Удаление, только если нет истории заявок. Иначе 409: историю не стираем."""
     client = await get_client(session, client_id)
     used = await session.scalar(
         select(func.count()).select_from(ScheduledUpdate).where(ScheduledUpdate.client_id == client.id)
