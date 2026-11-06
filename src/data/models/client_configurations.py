@@ -1,3 +1,5 @@
+"""Какая конфигурация стоит у клиента и какой релиз сейчас установлен."""
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 
 
 class ClientConfiguration(TimestampMixin, Base):
+    """Одна установка: клиент, конфигурация, установленный релиз и имя информационной базы."""
     __tablename__ = "client_configurations"
     __table_args__ = (
         UniqueConstraint(

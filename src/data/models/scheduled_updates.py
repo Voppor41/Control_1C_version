@@ -1,25 +1,29 @@
+"""Заявка на обновление, выбранное окно и история смены статуса."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
+from sqlalchemy import DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
-from .enums import UpdateStatus
+from .enums import UpdateStatus, persisted_enum
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from .client_configurations import ClientConfiguration
     from .clients import Client
+    from .configurations import ConfigurationVersion
     from .notifications import Notification
     from .update_slots import UpdateSlot
     from .users import User
 
 
 class ScheduledUpdate(TimestampMixin, Base):
+    """Заявка. source_version_id — что стояло при создании, target_version_id — на что обновляем."""
     __tablename__ = "scheduled_updates"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -28,13 +32,13 @@ class ScheduledUpdate(TimestampMixin, Base):
         default=uuid.uuid4,
     )
     status: Mapped[UpdateStatus] = mapped_column(
-        Enum(UpdateStatus, name="update_status", native_enum=False, length=32),
+        persisted_enum(UpdateStatus, "update_status"),
         default=UpdateStatus.REQUESTED,
         nullable=False,
         index=True,
     )
     comment: Mapped[Optional[str]] = mapped_column(Text)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("clients.id", ondelete="CASCADE"),
@@ -45,6 +49,16 @@ class ScheduledUpdate(TimestampMixin, Base):
         UUID(as_uuid=True),
         ForeignKey("client_configurations.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
+    )
+    source_version_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("configuration_versions.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    target_version_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("configuration_versions.id", ondelete="RESTRICT"),
         index=True,
     )
     slot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -67,6 +81,12 @@ class ScheduledUpdate(TimestampMixin, Base):
     client_configuration: Mapped["ClientConfiguration"] = relationship(
         back_populates="scheduled_updates",
     )
+    source_version: Mapped[Optional["ConfigurationVersion"]] = relationship(
+        foreign_keys=[source_version_id],
+    )
+    target_version: Mapped[Optional["ConfigurationVersion"]] = relationship(
+        foreign_keys=[target_version_id],
+    )
     slot: Mapped[Optional["UpdateSlot"]] = relationship(back_populates="scheduled_updates")
     requested_by: Mapped["User"] = relationship(
         back_populates="requested_updates",
@@ -87,6 +107,7 @@ class ScheduledUpdate(TimestampMixin, Base):
 
 
 class UpdateStatusHistory(Base):
+    """Кто и когда сменил статус. Старые строки не редактируются."""
     __tablename__ = "update_status_history"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -95,10 +116,10 @@ class UpdateStatusHistory(Base):
         default=uuid.uuid4,
     )
     old_status: Mapped[Optional[UpdateStatus]] = mapped_column(
-        Enum(UpdateStatus, name="update_status", native_enum=False, length=32),
+        persisted_enum(UpdateStatus, "update_status"),
     )
     new_status: Mapped[UpdateStatus] = mapped_column(
-        Enum(UpdateStatus, name="update_status", native_enum=False, length=32),
+        persisted_enum(UpdateStatus, "update_status"),
         nullable=False,
     )
     comment: Mapped[Optional[str]] = mapped_column(Text)

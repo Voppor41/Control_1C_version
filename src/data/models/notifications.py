@@ -1,13 +1,15 @@
+"""Сообщение конкретному пользователю клиента."""
+
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
 
-from .enums import NotificationType
+from .enums import NotificationType, persisted_enum
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 
 
 class Notification(TimestampMixin, Base):
+    """Одно сообщение одному получателю. У клиента без портального пользователя строка не появится."""
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -26,7 +29,7 @@ class Notification(TimestampMixin, Base):
         default=uuid.uuid4,
     )
     type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, name="notification_type", native_enum=False, length=32),
+        persisted_enum(NotificationType, "notification_type"),
         nullable=False,
         index=True,
     )

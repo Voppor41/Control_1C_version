@@ -1,10 +1,10 @@
-"""initial schema
+"""Первая схема: роли, пользователи, клиенты, конфигурации, проверки, слоты, заявки и уведомления.
 
 Revision ID: 20261102_0001
 Revises:
 Create Date: 2026-11-02
-
 """
+
 from typing import Sequence, Union
 import uuid
 
@@ -21,6 +21,7 @@ uuid_pk = postgresql.UUID(as_uuid=True)
 
 
 def upgrade() -> None:
+    """Создаёт таблицы и вставляет четыре роли."""
     op.create_table(
         "roles",
         sa.Column("id", uuid_pk, primary_key=True, nullable=False),
@@ -291,6 +292,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Удаляет таблицы в порядке зависимостей."""
     op.drop_table("notifications")
     op.drop_table("update_status_history")
     op.drop_table("scheduled_updates")

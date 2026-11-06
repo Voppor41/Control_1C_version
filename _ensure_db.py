@@ -1,3 +1,5 @@
+"""Создаёт базу из DATABASE_URL, если её ещё нет. Для локального запуска вне docker compose."""
+
 import asyncio
 from urllib.parse import urlparse
 
@@ -7,6 +9,7 @@ from src.core.config import settings
 
 
 async def main() -> None:
+    """Подключается к служебной базе postgres и создаёт базу из URL, если её нет."""
     parsed = urlparse(settings.database_url.replace("+asyncpg", ""))
     db_name = parsed.path.lstrip("/")
     admin = await asyncpg.connect(
