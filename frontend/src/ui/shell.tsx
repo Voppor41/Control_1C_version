@@ -87,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
         </button>
-        <span className="mobile-brand">Норд</span>
+        <span className="mobile-brand">Верконт</span>
       </header>
       {open ? (
         <button type="button" className="scrim" aria-label="Закрыть меню" onClick={() => setOpen(false)} />
@@ -96,8 +96,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <NavLink to="/" className="brand" end>
           <Mark />
           <span>
-            <strong>Норд</strong>
-            <small>сопровождение 1С</small>
+            <strong>Верконт</strong>
+            <small>учёт версий 1С</small>
           </span>
         </NavLink>
         <nav className="nav-scroll" aria-label="Разделы">
@@ -133,7 +133,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </small>
             </p>
           </div>
-          <button type="button" className="btn btn-light" onClick={logout}>
+          <button type="button" className="btn btn-quiet" onClick={logout}>
             Выйти
           </button>
         </div>
@@ -150,8 +150,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
 export function BootScreen() {
   return (
     <div className="boot">
-      <div>
-        <Mark size={42} />
+      <div className="boot-card">
+        <Mark size={36} />
+        <p className="wordmark">Верконт</p>
         <p>Открываем консоль…</p>
       </div>
     </div>
