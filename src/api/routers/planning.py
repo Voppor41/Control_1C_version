@@ -23,12 +23,13 @@ from src.api.schemas import (
 )
 from src.api.serializers import scheduled_update_detail, scheduled_update_read, slot_read
 from src.data.models import (
+    Account,
     Client,
+    Employee,
     RoleCode,
     ScheduledUpdate,
     UpdateSlot,
     UpdateStatus,
-    User,
 )
 from src.services.common import (
     actor_client_id,
@@ -71,16 +72,16 @@ def _slot_query():
     return stmt, booked
 
 
-async def _owner_for_create(session, actor: User, specialist_id: UUID | None) -> User:
+async def _owner_for_create(session, actor: Account, specialist_id: UUID | None) -> Employee:
     """Специалист создаёт окно себе. Администратор обязан передать specialist_id."""
-    if actor_role(actor) == RoleCode.SPECIALIST:
+    if isinstance(actor, Employee) and actor.role.code == RoleCode.SPECIALIST:
         owner_id = actor.id
     elif specialist_id is None:
         raise HTTPException(status_code=422, detail="specialist_id is required")
     else:
         owner_id = specialist_id
     owner = await session.scalar(
-        select(User).where(User.id == owner_id).options(selectinload(User.role))
+        select(Employee).where(Employee.id == owner_id).options(selectinload(Employee.role))
     )
     if owner is None or not owner.is_active or owner.role.code != RoleCode.SPECIALIST:
         raise HTTPException(status_code=422, detail="Slot must belong to an active support specialist")
@@ -177,7 +178,7 @@ async def list_slots(
 async def _list_slots(
     session,
     *,
-    actor: User,
+    actor: Account,
     available_only: bool,
     date_from: date | None,
     date_to: date | None,

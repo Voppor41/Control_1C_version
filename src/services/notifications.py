@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.data.models import (
+    Account,
     ClientConfiguration,
+    ClientUser,
     Notification,
     NotificationType,
-    Role,
-    RoleCode,
-    User,
 )
+from src.services.accounts import author_ids
 from src.services.catalog import get_client, get_current_version, get_installation
 from src.services.common import flush_session
 
@@ -34,25 +34,23 @@ async def notify_client_users(
     type: NotificationType,
     title: str,
     message: str,
-    created_by_id: UUID | None,
+    created_by: Account | None,
     client_configuration_id: UUID | None = None,
     scheduled_update_id: UUID | None = None,
     strict: bool = False,
 ) -> list[Notification]:
-    """Кладёт одно и то же сообщение каждому активному пользователю с ролью «клиент» у этой организации.
+    """Кладёт одно и то же сообщение каждому активному пользователю этой организации.
 
     Параметры:
+        created_by: сотрудник или пользователь компании, от чьего имени письмо. Можно не указывать.
         strict: если получателей нет, при True — ошибка 422, при False — тихий пропуск.
     """
     recipients = list(
         (
             await session.scalars(
-                select(User)
-                .join(Role, User.role_id == Role.id)
-                .where(
-                    User.client_id == client_id,
-                    User.is_active.is_(True),
-                    Role.code == RoleCode.CLIENT,
+                select(ClientUser).where(
+                    ClientUser.client_id == client_id,
+                    ClientUser.is_active.is_(True),
                 )
             )
         ).all()
@@ -64,6 +62,7 @@ async def notify_client_users(
                 detail="Client has no active portal user. Register a user with the client role first.",
             )
         return []
+    employee_id, client_user_id = author_ids(created_by) if created_by is not None else (None, None)
     notes: list[Notification] = []
     for recipient in recipients:
         note = Notification(
@@ -72,7 +71,8 @@ async def notify_client_users(
             message=message,
             is_read=False,
             recipient_id=recipient.id,
-            created_by_id=created_by_id,
+            created_by_employee_id=employee_id,
+            created_by_client_user_id=client_user_id,
             client_id=client_id,
             client_configuration_id=client_configuration_id,
             scheduled_update_id=scheduled_update_id,
@@ -86,7 +86,7 @@ async def notify_client_users(
 async def create_update_notification(
     session: AsyncSession,
     *,
-    actor: User,
+    actor: Account,
     client_id: UUID,
     client_configuration_id: UUID | None,
     title: str | None,
@@ -123,7 +123,7 @@ async def create_update_notification(
         type=NotificationType.UPDATE_AVAILABLE,
         title=resolved_title,
         message=resolved_message,
-        created_by_id=actor.id,
+        created_by=actor,
         client_configuration_id=installation.id if installation is not None else None,
         strict=True,
     )

@@ -13,13 +13,15 @@ from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from .client_configurations import ClientConfiguration
+    from .client_users import ClientUser
+    from .employees import Employee
     from .notifications import Notification
     from .scheduled_updates import ScheduledUpdate
-    from .users import User
 
 
 class Client(TimestampMixin, Base):
-    """Организация. responsible_employee_id — специалист, который ведёт этого клиента."""
+    """Организация. responsible_employee_id — сотрудник сопровождения, который её ведёт."""
+
     __tablename__ = "clients"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -37,17 +39,17 @@ class Client(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     responsible_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("employees.id", ondelete="SET NULL"),
         index=True,
     )
 
-    responsible_employee: Mapped[Optional["User"]] = relationship(
+    responsible_employee: Mapped[Optional["Employee"]] = relationship(
         back_populates="assigned_clients",
         foreign_keys=[responsible_employee_id],
     )
-    portal_users: Mapped[list["User"]] = relationship(
+    company_users: Mapped[list["ClientUser"]] = relationship(
         back_populates="client",
-        foreign_keys="User.client_id",
+        foreign_keys="ClientUser.client_id",
     )
     configurations: Mapped[list["ClientConfiguration"]] = relationship(
         back_populates="client",

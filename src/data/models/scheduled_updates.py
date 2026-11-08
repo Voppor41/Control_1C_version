@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,16 +15,30 @@ from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from .client_configurations import ClientConfiguration
+    from .client_users import ClientUser
     from .clients import Client
     from .configurations import ConfigurationVersion
+    from .employees import Employee
     from .notifications import Notification
     from .update_slots import UpdateSlot
-    from .users import User
 
 
 class ScheduledUpdate(TimestampMixin, Base):
-    """Заявка. source_version_id — что стояло при создании, target_version_id — на что обновляем."""
+    """Заявка. source_version_id — что стояло при создании, target_version_id — на что обновляем.
+
+    Запросить обновление может и пользователь компании, и сотрудник от её имени.
+    Поэтому автор заявки — ровно один из двух внешних ключей, а не «голый» id без таблицы.
+    Исполнитель (assigned_specialist_id) всегда сотрудник.
+    """
+
     __tablename__ = "scheduled_updates"
+    __table_args__ = (
+        CheckConstraint(
+            "(CASE WHEN requested_by_employee_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN requested_by_client_user_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_scheduled_updates_one_requester",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -66,14 +80,19 @@ class ScheduledUpdate(TimestampMixin, Base):
         ForeignKey("update_slots.id", ondelete="SET NULL"),
         index=True,
     )
-    requested_by_id: Mapped[uuid.UUID] = mapped_column(
+    requested_by_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("employees.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    requested_by_client_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("client_users.id", ondelete="RESTRICT"),
+        index=True,
     )
     assigned_specialist_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("employees.id", ondelete="SET NULL"),
         index=True,
     )
 
@@ -88,11 +107,15 @@ class ScheduledUpdate(TimestampMixin, Base):
         foreign_keys=[target_version_id],
     )
     slot: Mapped[Optional["UpdateSlot"]] = relationship(back_populates="scheduled_updates")
-    requested_by: Mapped["User"] = relationship(
+    requested_by_employee: Mapped[Optional["Employee"]] = relationship(
         back_populates="requested_updates",
-        foreign_keys=[requested_by_id],
+        foreign_keys=[requested_by_employee_id],
     )
-    assigned_specialist: Mapped[Optional["User"]] = relationship(
+    requested_by_client_user: Mapped[Optional["ClientUser"]] = relationship(
+        back_populates="requested_updates",
+        foreign_keys=[requested_by_client_user_id],
+    )
+    assigned_specialist: Mapped[Optional["Employee"]] = relationship(
         back_populates="assigned_updates",
         foreign_keys=[assigned_specialist_id],
     )
@@ -105,10 +128,38 @@ class ScheduledUpdate(TimestampMixin, Base):
         back_populates="scheduled_update",
     )
 
+    @property
+    def requested_by_id(self) -> uuid.UUID:
+        """Кто запросил заявку: id сотрудника или пользователя компании."""
+        value = self.requested_by_employee_id or self.requested_by_client_user_id
+        if value is None:
+            raise RuntimeError("scheduled update has no requester")
+        return value
+
+    @property
+    def requested_by(self) -> "Employee | ClientUser":
+        """Загруженный автор заявки. Связь requested_by_employee или requested_by_client_user уже должна быть в сессии."""
+        person = self.requested_by_employee or self.requested_by_client_user
+        if person is None:
+            raise RuntimeError("scheduled update requester is not loaded")
+        return person
+
 
 class UpdateStatusHistory(Base):
-    """Кто и когда сменил статус. Старые строки не редактируются."""
+    """Кто и когда сменил статус. Старые строки не редактируются.
+
+    Дату может выбрать и пользователь компании, и сотрудник, поэтому автор смены —
+    ровно один из двух внешних ключей.
+    """
+
     __tablename__ = "update_status_history"
+    __table_args__ = (
+        CheckConstraint(
+            "(CASE WHEN changed_by_employee_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN changed_by_client_user_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_update_status_history_one_changer",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -135,11 +186,39 @@ class UpdateStatusHistory(Base):
         nullable=False,
         index=True,
     )
-    changed_by_id: Mapped[uuid.UUID] = mapped_column(
+    changed_by_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=False,
+        ForeignKey("employees.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    changed_by_client_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("client_users.id", ondelete="RESTRICT"),
+        index=True,
     )
 
     scheduled_update: Mapped["ScheduledUpdate"] = relationship(back_populates="status_history")
-    changed_by: Mapped["User"] = relationship(back_populates="status_changes")
+    changed_by_employee: Mapped[Optional["Employee"]] = relationship(
+        back_populates="status_changes",
+        foreign_keys=[changed_by_employee_id],
+    )
+    changed_by_client_user: Mapped[Optional["ClientUser"]] = relationship(
+        back_populates="status_changes",
+        foreign_keys=[changed_by_client_user_id],
+    )
+
+    @property
+    def changed_by_id(self) -> uuid.UUID:
+        """Кто сменил статус: id сотрудника или пользователя компании."""
+        value = self.changed_by_employee_id or self.changed_by_client_user_id
+        if value is None:
+            raise RuntimeError("status change has no author")
+        return value
+
+    @property
+    def changed_by(self) -> "Employee | ClientUser":
+        """Загруженный автор смены статуса."""
+        person = self.changed_by_employee or self.changed_by_client_user
+        if person is None:
+            raise RuntimeError("status change author is not loaded")
+        return person

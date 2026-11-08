@@ -10,8 +10,10 @@ from src.core.security import hash_password, verify_password
 from src.data.models import (
     Client,
     ClientConfiguration,
+    ClientUser,
     Configuration,
     ConfigurationVersion,
+    Employee,
     Notification,
     NotificationType,
     Role,
@@ -20,7 +22,6 @@ from src.data.models import (
     UpdateSlot,
     UpdateStatus,
     UpdateStatusHistory,
-    User,
     VersionCheck,
 )
 
@@ -46,7 +47,6 @@ ROLE_TITLES = {
     RoleCode.ADMIN: "Администратор",
     RoleCode.SPECIALIST: "Специалист по сопровождению",
     RoleCode.MANAGER: "Руководитель отдела сопровождения",
-    RoleCode.CLIENT: "Клиент",
 }
 
 
@@ -60,7 +60,7 @@ def demo_id(name: str) -> uuid.UUID:
 
 
 async def seed_initial_data(session: AsyncSession) -> None:
-    """Добавляет четыре роли, если их ещё нет. Повторный вызов ничего не дублирует."""
+    """Добавляет три должности, если их ещё нет. Повторный вызов ничего не дублирует."""
     existing = set()
     for code in (await session.execute(select(Role.code))).scalars().all():
         existing.add(code.value if hasattr(code, "value") else str(code))
@@ -71,14 +71,14 @@ async def seed_initial_data(session: AsyncSession) -> None:
 
 
 async def _role(session: AsyncSession, code: RoleCode) -> Role:
-    """Ищет роль по коду. Падает, если миграция со справочником ещё не применена."""
+    """Ищет должность по коду. Падает, если миграция со справочником ещё не применена."""
     role = await session.scalar(select(Role).where(Role.code == code))
     if role is None:
         raise RuntimeError(f"Role {code.value} is missing. Run alembic upgrade head first.")
     return role
 
 
-async def _ensure_user(
+async def _ensure_employee(
     session: AsyncSession,
     *,
     key: str,
@@ -86,16 +86,15 @@ async def _ensure_user(
     full_name: str,
     password: str,
     role: Role,
-    client_id: uuid.UUID | None = None,
-) -> User:
-    """Создаёт пользователя или возвращает уже существующего с тем же id или почтой.
+) -> Employee:
+    """Создаёт сотрудника или возвращает уже существующего с тем же id или почтой.
 
     Для демо-аккаунтов пароль приводится к значению из README, если он не совпадает:
     иначе старая БД оставляет чужой хеш, и логин admin123 даёт 401.
     """
-    user = await session.scalar(select(User).where(User.email == email))
+    user = await session.scalar(select(Employee).where(Employee.email == email))
     if user is None:
-        user = await session.get(User, demo_id(key))
+        user = await session.get(Employee, demo_id(key))
     if user is not None:
         if user.email != email:
             user.email = email
@@ -103,13 +102,45 @@ async def _ensure_user(
             user.hashed_password = hash_password(password)
         await session.flush()
         return user
-    user = User(
+    user = Employee(
         id=demo_id(key),
         full_name=full_name,
         email=email,
         hashed_password=hash_password(password),
         is_active=True,
         role_id=role.id,
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def _ensure_client_user(
+    session: AsyncSession,
+    *,
+    key: str,
+    email: str,
+    full_name: str,
+    password: str,
+    client_id: uuid.UUID,
+) -> ClientUser:
+    """Создаёт пользователя компании или возвращает уже существующего с тем же id или почтой."""
+    user = await session.scalar(select(ClientUser).where(ClientUser.email == email))
+    if user is None:
+        user = await session.get(ClientUser, demo_id(key))
+    if user is not None:
+        if user.email != email:
+            user.email = email
+        if not verify_password(password, user.hashed_password):
+            user.hashed_password = hash_password(password)
+        await session.flush()
+        return user
+    user = ClientUser(
+        id=demo_id(key),
+        full_name=full_name,
+        email=email,
+        hashed_password=hash_password(password),
+        is_active=True,
         client_id=client_id,
     )
     session.add(user)
@@ -243,9 +274,8 @@ async def seed_demo_data(session: AsyncSession) -> None:
     admin_role = await _role(session, RoleCode.ADMIN)
     specialist_role = await _role(session, RoleCode.SPECIALIST)
     manager_role = await _role(session, RoleCode.MANAGER)
-    client_role = await _role(session, RoleCode.CLIENT)
 
-    await _ensure_user(
+    await _ensure_employee(
         session,
         key="user:admin",
         email="admin@example.com",
@@ -253,7 +283,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         password=DEMO_PASSWORD["admin@example.com"],
         role=admin_role,
     )
-    specialist = await _ensure_user(
+    specialist = await _ensure_employee(
         session,
         key="user:specialist",
         email="specialist@example.com",
@@ -261,7 +291,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         password=DEMO_PASSWORD["specialist@example.com"],
         role=specialist_role,
     )
-    await _ensure_user(
+    await _ensure_employee(
         session,
         key="user:manager",
         email="manager@example.com",
@@ -355,13 +385,12 @@ async def seed_demo_data(session: AsyncSession) -> None:
         infobase_name="vasilek_zup",
     )
 
-    portal = await _ensure_user(
+    portal = await _ensure_client_user(
         session,
         key="user:client",
         email="client@example.com",
         full_name="Иван Петров",
         password=DEMO_PASSWORD["client@example.com"],
-        role=client_role,
         client_id=romashka.id,
     )
 
@@ -405,7 +434,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
             client_configuration_id=vasilek_zup.id,
             source_version_id=zup_old.id,
             target_version_id=zup_current.id,
-            requested_by_id=specialist.id,
+            requested_by_employee_id=specialist.id,
             assigned_specialist_id=specialist.id,
         )
         session.add(scheduled)
@@ -419,7 +448,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
                     comment="Клиент запросил обновление",
                     changed_at=completed_at - timedelta(days=1),
                     scheduled_update_id=scheduled.id,
-                    changed_by_id=specialist.id,
+                    changed_by_employee_id=specialist.id,
                 ),
                 UpdateStatusHistory(
                     id=demo_id("hist:vasilek:completed"),
@@ -428,7 +457,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
                     comment="Обновление выполнено",
                     changed_at=completed_at,
                     scheduled_update_id=scheduled.id,
-                    changed_by_id=specialist.id,
+                    changed_by_employee_id=specialist.id,
                 ),
             ]
         )
@@ -462,7 +491,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
                 ),
                 is_read=False,
                 recipient_id=portal.id,
-                created_by_id=specialist.id,
+                created_by_employee_id=specialist.id,
                 client_id=romashka.id,
                 client_configuration_id=romashka_bp.id,
             )
@@ -478,7 +507,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
 
 
 async def _cli() -> None:
-    """Точка входа python -m src.data.seed: роли и демо без запуска HTTP."""
+    """Точка входа python -m src.data.seed: должности и демо без запуска HTTP."""
     from src.core.database import async_session
 
     async with async_session() as session:

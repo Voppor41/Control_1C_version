@@ -129,7 +129,7 @@ def main() -> None:
     if users["total"] < 1:
         raise SmokeError(users)
     roles = request("GET", "/api/roles", admin)
-    if {item["code"] for item in roles} != {"admin", "specialist", "manager", "client"}:
+    if {item["code"] for item in roles} != {"admin", "specialist", "manager"}:
         raise SmokeError(roles)
     ok("1.1 users and roles")
 

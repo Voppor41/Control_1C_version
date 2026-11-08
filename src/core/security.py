@@ -1,4 +1,4 @@
-"""Хеш пароля и выпуск JWT. В токене лежат идентификатор пользователя и код роли."""
+"""Хеш пароля и выпуск JWT. В токене лежат идентификатор, код роли и таблица человека."""
 
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -27,18 +27,19 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(*, user_id: UUID, role: str) -> str:
+def create_access_token(*, user_id: UUID, role: str, principal: str) -> str:
     """Собирает JWT.
 
     Параметры:
         user_id: чей это токен.
-        role: код роли, чтобы клиенту не читать базу ради подписи.
+        role: код доступа (admin, specialist, manager или client).
+        principal: таблица id — employee или client_user. Без неё один UUID не отличить.
 
     Возвращает:
         Подписанную строку токена.
     """
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": str(user_id), "role": role, "exp": expires}
+    payload = {"sub": str(user_id), "role": role, "principal": principal, "exp": expires}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -46,7 +47,7 @@ def decode_access_token(token: str) -> dict:
     """Проверяет подпись и срок.
 
     Возвращает:
-        Полезную нагрузку с полями sub и role.
+        Полезную нагрузку с полями sub, role и principal.
 
     Исключения:
         TokenError, если токен недействителен.

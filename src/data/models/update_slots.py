@@ -13,12 +13,13 @@ from src.core.database import Base
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from .employees import Employee
     from .scheduled_updates import ScheduledUpdate
-    from .users import User
 
 
 class UpdateSlot(TimestampMixin, Base):
     """Интервал, когда специалист может провести обновление. Уникален по специалисту, дате и времени начала."""
+
     __tablename__ = "update_slots"
     __table_args__ = (
         UniqueConstraint(
@@ -41,10 +42,10 @@ class UpdateSlot(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     specialist_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("employees.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
 
-    specialist: Mapped["User"] = relationship(back_populates="update_slots")
+    specialist: Mapped["Employee"] = relationship(back_populates="update_slots")
     scheduled_updates: Mapped[list["ScheduledUpdate"]] = relationship(back_populates="slot")

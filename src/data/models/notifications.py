@@ -1,9 +1,9 @@
-"""Сообщение конкретному пользователю клиента."""
+"""Сообщение пользователю компании. Автор может быть сотрудником или этим же пользователем."""
 
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,14 +14,27 @@ from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from .client_configurations import ClientConfiguration
+    from .client_users import ClientUser
     from .clients import Client
+    from .employees import Employee
     from .scheduled_updates import ScheduledUpdate
-    from .users import User
 
 
 class Notification(TimestampMixin, Base):
-    """Одно сообщение одному получателю. У клиента без портального пользователя строка не появится."""
+    """Одно сообщение одному пользователю компании.
+
+    Получатель всегда из client_users. Автор — либо сотрудник, либо пользователь компании,
+    либо никто (оба внешних ключа пустые). Оба автора сразу стоять не могут.
+    """
+
     __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint(
+            "(CASE WHEN created_by_employee_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN created_by_client_user_id IS NOT NULL THEN 1 ELSE 0 END) <= 1",
+            name="ck_notifications_one_author",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -38,13 +51,19 @@ class Notification(TimestampMixin, Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     recipient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("client_users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("employees.id", ondelete="SET NULL"),
+        index=True,
+    )
+    created_by_client_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("client_users.id", ondelete="SET NULL"),
+        index=True,
     )
     client_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -61,13 +80,17 @@ class Notification(TimestampMixin, Base):
         ForeignKey("scheduled_updates.id", ondelete="SET NULL"),
     )
 
-    recipient: Mapped["User"] = relationship(
+    recipient: Mapped["ClientUser"] = relationship(
         back_populates="received_notifications",
         foreign_keys=[recipient_id],
     )
-    created_by: Mapped[Optional["User"]] = relationship(
+    created_by_employee: Mapped[Optional["Employee"]] = relationship(
         back_populates="created_notifications",
-        foreign_keys=[created_by_id],
+        foreign_keys=[created_by_employee_id],
+    )
+    created_by_client_user: Mapped[Optional["ClientUser"]] = relationship(
+        back_populates="created_notifications",
+        foreign_keys=[created_by_client_user_id],
     )
     client: Mapped["Client"] = relationship(back_populates="notifications")
     client_configuration: Mapped[Optional["ClientConfiguration"]] = relationship(
@@ -76,3 +99,8 @@ class Notification(TimestampMixin, Base):
     scheduled_update: Mapped[Optional["ScheduledUpdate"]] = relationship(
         back_populates="notifications",
     )
+
+    @property
+    def created_by_id(self) -> uuid.UUID | None:
+        """Идентификатор автора для ответа API: сотрудник, пользователь компании или никто."""
+        return self.created_by_employee_id or self.created_by_client_user_id

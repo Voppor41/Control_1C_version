@@ -7,7 +7,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.data.models import Role, RoleCode, User
+from src.data.models import Account, ClientUser, Employee, Role, RoleCode
 
 
 def like_pattern(value: str) -> str:
@@ -44,39 +44,50 @@ async def flush_session(session: AsyncSession) -> None:
         raise HTTPException(status_code=409, detail="Data conflict") from exc
 
 
-def remember_actor(user: User) -> User:
-    """Запоминает роль и client_id на объекте пользователя.
+def remember_actor(person: Account) -> Account:
+    """Запоминает код доступа и client_id на объекте человека.
 
-    Позже selectinload того же User (автор заявки) может сбросить связь role.
+    Позже selectinload той же строки (автор заявки) может сбросить связь role.
     Чтение роли тогда пошло бы ленивым запросом вне greenlet.
+    У сотрудника роль берётся из справочника должностей, у пользователя компании это всегда client.
 
     Возвращает:
-        Того же пользователя.
+        Того же человека.
     """
 
-    user.__dict__["_role_code"] = user.role.code
-    user.__dict__["_client_id"] = user.client_id
-    return user
+    if isinstance(person, Employee):
+        person.__dict__["_role_code"] = person.role.code
+        person.__dict__["_client_id"] = None
+    elif isinstance(person, ClientUser):
+        person.__dict__["_role_code"] = RoleCode.CLIENT
+        person.__dict__["_client_id"] = person.client_id
+    else:
+        raise TypeError("Actor must be an employee or a company user")
+    return person
 
 
-def actor_role(user: User) -> RoleCode:
-    """Код роли из кэша remember_actor либо из загруженной связи."""
-    cached = user.__dict__.get("_role_code")
+def actor_role(person: Account) -> RoleCode:
+    """Код доступа из кэша remember_actor либо из загруженной должности."""
+    cached = person.__dict__.get("_role_code")
     if cached is not None:
         return cached
-    return user.role.code
+    if isinstance(person, ClientUser):
+        return RoleCode.CLIENT
+    return person.role.code
 
 
-def actor_client_id(user: User) -> uuid.UUID | None:
-    """Организация пользователя-клиента. У сотрудника возвращает None."""
-    if "_client_id" in user.__dict__:
-        return user.__dict__["_client_id"]
-    return user.client_id
+def actor_client_id(person: Account) -> uuid.UUID | None:
+    """Организация пользователя компании. У сотрудника возвращает None."""
+    if "_client_id" in person.__dict__:
+        return person.__dict__["_client_id"]
+    if isinstance(person, ClientUser):
+        return person.client_id
+    return None
 
 
-def ensure_client_scope(user: User, client_id: uuid.UUID) -> None:
-    """Клиенту нельзя открыть чужую организацию. Остальные роли не ограничиваются."""
-    if actor_role(user) == RoleCode.CLIENT and actor_client_id(user) != client_id:
+def ensure_client_scope(person: Account, client_id: uuid.UUID) -> None:
+    """Пользователю компании нельзя открыть чужую организацию. Сотрудники не ограничиваются."""
+    if actor_role(person) == RoleCode.CLIENT and actor_client_id(person) != client_id:
         raise HTTPException(status_code=403, detail="You can only access your own client data")
 
 

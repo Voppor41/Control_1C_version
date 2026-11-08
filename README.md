@@ -16,7 +16,7 @@ python scripts/smoke.py
 
 `GET /health` is liveness: the process is up and Postgres answers `SELECT 1`. A database outage returns **503** and `"database": "down"`.
 
-`GET /health/ready` checks that the four roles exist and that the demo accounts were seeded (`demo_seeded: true`).
+`GET /health/ready` checks that the employee positions admin, specialist and manager exist and that the demo accounts were seeded (`demo_seeded: true`). Company logins are not a position: they live in `client_users` and still sign in with role `client`.
 
 `python scripts/smoke.py` signs in as every role and walks the functional requirements: clients and configurations, a version check, a notification, a booked update, a status change, and the head-of-department reports. It creates its own client (so it can be repeated) and also reads the seeded demo rows. `BASE_URL` overrides the default `http://127.0.0.1:8000`.
 
@@ -171,10 +171,15 @@ Bearer tokens from `POST /api/auth/login` (`{"email","password"}`). Send `Author
 
 ## Schema notes
 
-The initial migration already created clients, configurations, version checks, notifications, slots, and scheduled updates. This MVP adds:
+The initial migration already created clients, configurations, version checks, notifications, slots, and scheduled updates. Later revisions add:
 
 - `scheduled_updates.source_version_id` and `target_version_id` (`20261105_0002`) so a finished update can advance the installed version and reports can show from/to releases.
+- A split of people (`20261108_0003`). `roles` keeps employee positions only: admin, specialist, manager. `clients` stays the company table. Staff accounts are `employees` (position via `role_id`). Company logins are `client_users` (`client_id` required). The mixed `users` table is removed. Login email is unique inside each table and a trigger rejects the same email in both.
+- Columns that are always staff point at `employees`: `clients.responsible_employee_id`, `update_slots.specialist_id`, `scheduled_updates.assigned_specialist_id`, `version_checks.checked_by_id`.
+- Columns that can be either person are a pair of nullable foreign keys, with a check that exactly one is set: who requested an update (`requested_by_employee_id` / `requested_by_client_user_id`) and who changed a status (`changed_by_employee_id` / `changed_by_client_user_id`). Notification authors use the same pair but either side may be empty. `notifications.recipient_id` points only at `client_users`. The HTTP fields `requested_by_id`, `changed_by_id` and `created_by_id` still return that one id.
 - Removal of the unused duplicate model `src/data/models/schedual_updates.py`. It mapped the same tables as `scheduled_updates.py` (and a target-version relationship the migration did not have). Importing both would register `scheduled_updates` twice.
+
+An existing Docker database picks this up with `alembic upgrade head` (the API container does that on start). A new volume does too. To rebuild from scratch: `docker compose down -v && docker compose up --build`.
 
 `GET /health` and `GET /health/ready` are also mounted at `/api/health` and `/api/health/ready`.
 

@@ -26,7 +26,12 @@ def persisted_enum(enum_cls: type[Enum], name: str) -> SAEnum:
 
 
 class RoleCode(str, Enum):
-    """Кто работает в системе: администратор, специалист, руководитель, клиент."""
+    """Код доступа в API.
+
+    admin, specialist и manager — должности сотрудников, они лежат в roles.
+    client — пользователь компании. Такой строки в roles нет: человек хранится в client_users.
+    """
+
     ADMIN = "admin"
     SPECIALIST = "specialist"
     MANAGER = "manager"

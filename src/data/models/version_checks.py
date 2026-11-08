@@ -13,11 +13,12 @@ from src.core.database import Base
 if TYPE_CHECKING:
     from .client_configurations import ClientConfiguration
     from .configurations import ConfigurationVersion
-    from .users import User
+    from .employees import Employee
 
 
 class VersionCheck(Base):
     """История сравнения. Строка не переписывается: новый запуск проверки добавляет ещё одну."""
+
     __tablename__ = "version_checks"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -50,7 +51,7 @@ class VersionCheck(Base):
     )
     checked_by_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("employees.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -62,4 +63,4 @@ class VersionCheck(Base):
     actual_version: Mapped["ConfigurationVersion"] = relationship(
         foreign_keys=[actual_version_id],
     )
-    checked_by: Mapped["User"] = relationship(back_populates="version_checks")
+    checked_by: Mapped["Employee"] = relationship(back_populates="version_checks")

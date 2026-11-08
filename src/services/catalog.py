@@ -13,8 +13,7 @@ from src.data.models import (
     ClientConfiguration,
     Configuration,
     ConfigurationVersion,
-    RoleCode,
-    User,
+    Employee,
     VersionCheck,
 )
 from src.services.common import flush_session
@@ -32,12 +31,10 @@ async def get_client(session: AsyncSession, client_id: UUID) -> Client:
     return client
 
 
-async def ensure_staff_user(session: AsyncSession, user_id: UUID) -> User:
-    """Проверяет, что ответственный — активный сотрудник, а не портальный клиент."""
-    user = await session.scalar(
-        select(User).where(User.id == user_id).options(selectinload(User.role))
-    )
-    if user is None or not user.is_active or user.role.code == RoleCode.CLIENT:
+async def ensure_staff_user(session: AsyncSession, user_id: UUID) -> Employee:
+    """Проверяет, что ответственный — активный сотрудник, а не пользователь компании."""
+    user = await session.get(Employee, user_id)
+    if user is None or not user.is_active:
         raise HTTPException(
             status_code=422,
             detail="Responsible employee must be an active staff user",
