@@ -1,4 +1,8 @@
-"""Справочник ролей. Код совпадает с RoleCode и не меняется из API."""
+"""Должности сотрудников сопровождения. Код совпадает с RoleCode и не меняется из API.
+
+Пользователь компании должность не получает: его нет в этой таблице.
+Код client остаётся только в ответах API и в JWT, отдельной строки roles для него нет.
+"""
 
 import uuid
 from typing import TYPE_CHECKING
@@ -13,11 +17,12 @@ from .enums import RoleCode, persisted_enum
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
-    from .users import User
+    from .employees import Employee
 
 
 class Role(TimestampMixin, Base):
-    """Строка справочника ролей. Пользователи ссылаются на неё, а не хранят код строкой."""
+    """Строка справочника должностей. Сотрудники ссылаются на неё, а не хранят код строкой."""
+
     __tablename__ = "roles"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -33,4 +38,4 @@ class Role(TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
 
-    users: Mapped[list["User"]] = relationship(back_populates="role")
+    employees: Mapped[list["Employee"]] = relationship(back_populates="role")

@@ -20,7 +20,7 @@ class Page(BaseModel, Generic[T]):
 
 
 class RoleRead(BaseModel):
-    """Роль из справочника."""
+    """Должность сотрудника из справочника. Пользователя компании в этом списке нет."""
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -29,7 +29,7 @@ class RoleRead(BaseModel):
 
 
 class UserRead(BaseModel):
-    """Пользователь без пароля."""
+    """Сотрудник или пользователь компании, без пароля. role=client — это пользователь компании."""
     id: UUID
     full_name: str
     email: EmailStr

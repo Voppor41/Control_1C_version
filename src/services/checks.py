@@ -9,11 +9,11 @@ from sqlalchemy.orm import aliased, selectinload
 
 from src.api.schemas import OutdatedClient, OutdatedConfiguration, OutdatedReport
 from src.data.models import (
+    Account,
     Client,
     ClientConfiguration,
     Configuration,
     ConfigurationVersion,
-    User,
     VersionCheck,
 )
 from src.services.catalog import get_current_version, installation_options
@@ -22,7 +22,7 @@ from src.services.common import flush_session, like_pattern
 
 async def run_version_checks(
     session: AsyncSession,
-    actor: User,
+    actor: Account,
     *,
     client_id: UUID | None,
     client_configuration_id: UUID | None,

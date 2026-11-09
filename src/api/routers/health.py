@@ -1,4 +1,4 @@
-"""Проверка, что процесс жив, база отвечает, роли на месте и демо-пользователи созданы."""
+"""Проверка, что процесс жив, база отвечает, должности на месте и демо-учётки созданы."""
 
 import logging
 
@@ -8,14 +8,14 @@ from sqlalchemy import select, text
 
 from src.core.config import settings
 from src.core.database import async_session
-from src.data.models import Role, User
+from src.data.models import ClientUser, Employee, Role
 from src.data.seed import DEMO_EMAILS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
 
-REQUIRED_ROLES = {"admin", "specialist", "manager", "client"}
+REQUIRED_ROLES = {"admin", "specialist", "manager"}
 
 
 async def database_reachable() -> bool:
@@ -44,7 +44,7 @@ async def health():
 @router.get("/health/ready", summary="Readiness: migrations, roles, demo accounts")
 @router.get("/api/health/ready", include_in_schema=False)
 async def ready():
-    """Готовность: все четыре роли есть. demo_seeded говорит, созданы ли учебные учётки."""
+    """Готовность: должности admin, specialist и manager есть. demo_seeded — созданы ли учебные учётки."""
     if not await database_reachable():
         return JSONResponse(
             status_code=503,
@@ -54,7 +54,10 @@ async def ready():
         async with async_session() as session:
             codes = list((await session.scalars(select(Role.code))).all())
             present = set(
-                (await session.scalars(select(User.email).where(User.email.in_(DEMO_EMAILS)))).all()
+                (await session.scalars(select(Employee.email).where(Employee.email.in_(DEMO_EMAILS)))).all()
+            )
+            present.update(
+                (await session.scalars(select(ClientUser.email).where(ClientUser.email.in_(DEMO_EMAILS)))).all()
             )
     except Exception:
         logger.exception("readiness check failed")

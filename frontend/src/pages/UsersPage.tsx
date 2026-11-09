@@ -229,9 +229,18 @@ function UserDialog({
     if (ok) onSaved();
   }
 
-  const roleOptions = roles.data?.length
-    ? roles.data
-    : ROLE_ORDER.map((code) => ({ id: code, code, name: roleLabelLong(code) }));
+  const loaded = roles.data ?? [];
+  const positions = loaded.length
+    ? loaded.map((item) => ({ id: item.id, code: item.code, name: item.name }))
+    : ROLE_ORDER.filter((code) => code !== "client").map((code) => ({
+        id: code,
+        code,
+        name: roleLabelLong(code),
+      }));
+  const roleOptions = positions.some((item) => item.code === "client")
+    ? positions
+    : [...positions, { id: "client", code: "client" as const, name: roleLabelLong("client") }];
+  roleOptions.sort((a, b) => ROLE_ORDER.indexOf(a.code) - ROLE_ORDER.indexOf(b.code));
 
   return (
     <Modal title={user ? "Учётная запись" : "Новый пользователь"} onClose={onClose} locked={submit.pending}>
@@ -266,7 +275,11 @@ function UserDialog({
           <Field label="Телефон" error={submit.error?.fieldErrors.phone}>
             <TextInput value={form.phone} maxLength={32} onChange={(event) => set("phone", event.target.value)} />
           </Field>
-          <Field label="Роль" error={submit.error?.fieldErrors.role}>
+          <Field
+            label="Роль"
+            hint="Клиент — пользователь компании. Остальные — должности сотрудников."
+            error={submit.error?.fieldErrors.role}
+          >
             <Select value={form.role} onChange={(event) => set("role", event.target.value as RoleCode)}>
               {roleOptions.map((item) => (
                 <option key={item.id} value={item.code}>

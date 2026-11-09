@@ -12,6 +12,10 @@ const DETAILS: Record<string, string> = {
   "Client role requires client_id": "Для роли «Клиент» нужно выбрать организацию",
   "Only client users can be linked to a client company":
     "Организацию можно привязать только к пользователю с ролью «Клиент»",
+  "Cannot turn an employee into a company user. Register a company user instead.":
+    "Нельзя превратить сотрудника в пользователя компании. Зарегистрируйте пользователя компании отдельно.",
+  "Cannot assign an employee position to a company user. Register an employee instead.":
+    "Нельзя назначить пользователю компании должность сотрудника. Зарегистрируйте сотрудника отдельно.",
   "You cannot deactivate yourself": "Нельзя отключить свою учётную запись",
   "You cannot remove your own administrator role": "Нельзя снять с себя роль администратора",
   "Cannot remove or deactivate the last active administrator":

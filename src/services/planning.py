@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.data.models import (
+    Account,
     ClientConfiguration,
     ConfigurationVersion,
     NotificationType,
@@ -17,8 +18,8 @@ from src.data.models import (
     UpdateSlot,
     UpdateStatus,
     UpdateStatusHistory,
-    User,
 )
+from src.services.accounts import author_ids
 from src.services.catalog import get_current_version, get_installation
 from src.services.common import actor_role, ensure_client_scope, flush_session
 from src.services.notifications import notify_client_users
@@ -52,12 +53,18 @@ def update_options(*, with_history: bool = False):
         selectinload(ScheduledUpdate.source_version),
         selectinload(ScheduledUpdate.target_version),
         selectinload(ScheduledUpdate.slot).selectinload(UpdateSlot.specialist),
-        selectinload(ScheduledUpdate.requested_by),
+        selectinload(ScheduledUpdate.requested_by_employee),
+        selectinload(ScheduledUpdate.requested_by_client_user),
         selectinload(ScheduledUpdate.assigned_specialist),
     ]
     if with_history:
         options.append(
-            selectinload(ScheduledUpdate.status_history).selectinload(UpdateStatusHistory.changed_by)
+            selectinload(ScheduledUpdate.status_history).selectinload(UpdateStatusHistory.changed_by_employee)
+        )
+        options.append(
+            selectinload(ScheduledUpdate.status_history).selectinload(
+                UpdateStatusHistory.changed_by_client_user
+            )
         )
     return options
 
@@ -80,12 +87,12 @@ async def get_scheduled_update(
     return row
 
 
-def ensure_can_view(user: User, row: ScheduledUpdate) -> None:
+def ensure_can_view(user: Account, row: ScheduledUpdate) -> None:
     """Клиент видит только заявки своей организации."""
     ensure_client_scope(user, row.client_id)
 
 
-def ensure_can_book(user: User, installation: ClientConfiguration) -> None:
+def ensure_can_book(user: Account, installation: ClientConfiguration) -> None:
     """Дату выбирает клиент для себя или специалист/администратор. Руководитель только смотрит."""
     if actor_role(user) == RoleCode.CLIENT:
         ensure_client_scope(user, installation.client_id)
@@ -154,16 +161,18 @@ def add_history(
     old_status: UpdateStatus | None,
     new_status: UpdateStatus,
     comment: str | None,
-    actor_id: UUID,
+    actor: Account,
 ) -> None:
     """Добавляет строку истории, не трогая уже загруженную коллекцию (иначе ленивая подгрузка в async)."""
+    employee_id, client_user_id = author_ids(actor)
     session.add(
         UpdateStatusHistory(
             old_status=old_status,
             new_status=new_status,
             comment=comment,
             scheduled_update_id=update.id,
-            changed_by_id=actor_id,
+            changed_by_employee_id=employee_id,
+            changed_by_client_user_id=client_user_id,
         )
     )
 
@@ -172,7 +181,7 @@ async def _notify_status(
     session: AsyncSession,
     update: ScheduledUpdate,
     kind: NotificationType,
-    actor_id: UUID,
+    actor: Account,
 ) -> None:
     """Письмо клиенту о дате, выполнении или отмене. Смена на in_progress письмом не сопровождается."""
     installation = update.client_configuration
@@ -199,7 +208,7 @@ async def _notify_status(
         type=kind,
         title=title,
         message=message,
-        created_by_id=actor_id,
+        created_by=actor,
         client_configuration_id=update.client_configuration_id,
         scheduled_update_id=update.id,
         strict=False,
@@ -209,7 +218,7 @@ async def _notify_status(
 async def create_scheduled_update(
     session: AsyncSession,
     *,
-    actor: User,
+    actor: Account,
     client_configuration_id: UUID,
     slot_id: UUID | None,
     comment: str | None,
@@ -250,6 +259,7 @@ async def create_scheduled_update(
         assigned_id = actor.id
 
     status = UpdateStatus.SCHEDULED if slot is not None else UpdateStatus.REQUESTED
+    employee_id, client_user_id = author_ids(actor)
     row = ScheduledUpdate(
         status=status,
         comment=comment,
@@ -258,7 +268,8 @@ async def create_scheduled_update(
         source_version_id=installation.installed_version_id,
         target_version_id=current.id,
         slot_id=slot.id if slot is not None else None,
-        requested_by_id=actor.id,
+        requested_by_employee_id=employee_id,
+        requested_by_client_user_id=client_user_id,
         assigned_specialist_id=assigned_id,
     )
     session.add(row)
@@ -269,13 +280,13 @@ async def create_scheduled_update(
         old_status=None,
         new_status=status,
         comment=comment,
-        actor_id=actor.id,
+        actor=actor,
     )
     await flush_session(session)
     if slot is not None:
         session.expire(row, ["slot", "target_version", "client_configuration"])
         loaded = await get_scheduled_update(session, row.id)
-        await _notify_status(session, loaded, NotificationType.UPDATE_SCHEDULED, actor.id)
+        await _notify_status(session, loaded, NotificationType.UPDATE_SCHEDULED, actor)
     return row
 
 
@@ -283,7 +294,7 @@ async def assign_slot(
     session: AsyncSession,
     update: ScheduledUpdate,
     *,
-    actor: User,
+    actor: Account,
     slot_id: UUID,
     comment: str | None = None,
 ) -> None:
@@ -314,12 +325,12 @@ async def assign_slot(
             old_status=old,
             new_status=UpdateStatus.SCHEDULED,
             comment=comment,
-            actor_id=actor.id,
+            actor=actor,
         )
     await flush_session(session)
     session.expire(update, ["slot", "target_version", "client_configuration"])
     loaded = await get_scheduled_update(session, update.id)
-    await _notify_status(session, loaded, NotificationType.UPDATE_SCHEDULED, actor.id)
+    await _notify_status(session, loaded, NotificationType.UPDATE_SCHEDULED, actor)
 
 
 async def _apply_completion(session: AsyncSession, update: ScheduledUpdate) -> None:
@@ -345,7 +356,7 @@ async def change_status(
     session: AsyncSession,
     update: ScheduledUpdate,
     *,
-    actor: User,
+    actor: Account,
     new_status: UpdateStatus,
     comment: str | None,
 ) -> None:
@@ -380,7 +391,7 @@ async def change_status(
         old_status=old,
         new_status=new_status,
         comment=comment,
-        actor_id=actor.id,
+        actor=actor,
     )
     await flush_session(session)
     if new_status in (
@@ -396,4 +407,4 @@ async def change_status(
             UpdateStatus.COMPLETED: NotificationType.UPDATE_COMPLETED,
             UpdateStatus.CANCELLED: NotificationType.UPDATE_CANCELLED,
         }[new_status]
-        await _notify_status(session, loaded, kind, actor.id)
+        await _notify_status(session, loaded, kind, actor)

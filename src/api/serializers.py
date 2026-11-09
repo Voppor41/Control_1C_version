@@ -21,30 +21,45 @@ from src.api.schemas import (
 from src.data.models import (
     Client,
     ClientConfiguration,
+    ClientUser,
     Configuration,
     ConfigurationVersion,
+    Employee,
     Notification,
+    RoleCode,
     ScheduledUpdate,
     UpdateSlot,
     UpdateStatusHistory,
-    User,
     VersionCheck,
 )
 
 
-def user_read(user: User) -> UserRead:
-    """Карточка пользователя без хеша пароля."""
+def user_read(person: Employee | ClientUser) -> UserRead:
+    """Карточка без хеша пароля. У сотрудника role — должность, у пользователя компании role=client."""
+    if isinstance(person, Employee):
+        return UserRead(
+            id=person.id,
+            full_name=person.full_name,
+            email=person.email,
+            phone=person.phone,
+            is_active=person.is_active,
+            role=person.role.code,
+            client_id=None,
+            client_name=None,
+            created_at=person.created_at,
+            updated_at=person.updated_at,
+        )
     return UserRead(
-        id=user.id,
-        full_name=user.full_name,
-        email=user.email,
-        phone=user.phone,
-        is_active=user.is_active,
-        role=user.role.code,
-        client_id=user.client_id,
-        client_name=user.client.company_name if user.client is not None else None,
-        created_at=user.created_at,
-        updated_at=user.updated_at,
+        id=person.id,
+        full_name=person.full_name,
+        email=person.email,
+        phone=person.phone,
+        is_active=person.is_active,
+        role=RoleCode.CLIENT,
+        client_id=person.client_id,
+        client_name=person.client.company_name if person.client is not None else None,
+        created_at=person.created_at,
+        updated_at=person.updated_at,
     )
 
 

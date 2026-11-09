@@ -1,4 +1,4 @@
-"""Учётная запись. У роли «клиент» заполнен client_id, у сотрудников он пустой."""
+"""Сотрудник службы сопровождения. Пользователи компании сюда не входят."""
 
 import uuid
 from typing import TYPE_CHECKING, Optional
@@ -20,9 +20,14 @@ if TYPE_CHECKING:
     from .version_checks import VersionCheck
 
 
-class User(TimestampMixin, Base):
-    """Человек с паролем и одной ролью. client_id связывает портального пользователя с организацией."""
-    __tablename__ = "users"
+class Employee(TimestampMixin, Base):
+    """Учётка сотрудника: должность из roles, пароль и контакты.
+
+    Почта уникальна здесь и не должна совпадать с почтой client_users
+    (это проверяет триггер login_email_not_shared и регистрация в API).
+    """
+
+    __tablename__ = "employees"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -40,39 +45,27 @@ class User(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("clients.id", ondelete="SET NULL", use_alter=True),
-        index=True,
-    )
 
-    role: Mapped["Role"] = relationship(back_populates="users")
-    client: Mapped[Optional["Client"]] = relationship(
-        back_populates="portal_users",
-        foreign_keys=[client_id],
-    )
+    role: Mapped["Role"] = relationship(back_populates="employees")
     assigned_clients: Mapped[list["Client"]] = relationship(
         back_populates="responsible_employee",
         foreign_keys="Client.responsible_employee_id",
     )
     version_checks: Mapped[list["VersionCheck"]] = relationship(back_populates="checked_by")
     created_notifications: Mapped[list["Notification"]] = relationship(
-        back_populates="created_by",
-        foreign_keys="Notification.created_by_id",
-    )
-    received_notifications: Mapped[list["Notification"]] = relationship(
-        back_populates="recipient",
-        foreign_keys="Notification.recipient_id",
+        back_populates="created_by_employee",
+        foreign_keys="Notification.created_by_employee_id",
     )
     update_slots: Mapped[list["UpdateSlot"]] = relationship(back_populates="specialist")
     requested_updates: Mapped[list["ScheduledUpdate"]] = relationship(
-        back_populates="requested_by",
-        foreign_keys="ScheduledUpdate.requested_by_id",
+        back_populates="requested_by_employee",
+        foreign_keys="ScheduledUpdate.requested_by_employee_id",
     )
     assigned_updates: Mapped[list["ScheduledUpdate"]] = relationship(
         back_populates="assigned_specialist",
         foreign_keys="ScheduledUpdate.assigned_specialist_id",
     )
     status_changes: Mapped[list["UpdateStatusHistory"]] = relationship(
-        back_populates="changed_by",
+        back_populates="changed_by_employee",
+        foreign_keys="UpdateStatusHistory.changed_by_employee_id",
     )
